@@ -379,18 +379,162 @@ rule-providers:
     behavior: domain
     format: mrs
     path: ./ruleset/category-games.mrs
+  steam:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./ruleset/steam.mrs
+  roblox:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./ruleset/roblox.mrs
 
 # ============================== Proxy groups ==============================
 proxy-groups:
-  # --- Main ---
+  # --- Entry groups ---
+  # Used only by the final MATCH rule.
+  - name: Final
+    type: select
+    proxies:
+      - CH Nodes
+      - BE Nodes
+      - RU Nodes
+      - Auto
+      - Manual
+      - DIRECT
+
+  # General group for the RKN community / IP rules.
   - name: Proxy
     type: select
     proxies:
-      - Auto
-      - Failover
+      - CH Nodes
+      - BE Nodes
       - RU Nodes
-      - Foreign Nodes
+      - Auto
+      - Manual
       - DIRECT
+
+  # --- Services ---
+  # Order of choices: countries, then Auto, then Manual (one specific server).
+  # Telegram also offers RU Nodes (it only cares about the exit IP). The others
+  # do not: Discord, OpenAI and Anthropic restrict Russian IPs.
+  - name: Telegram
+    type: select
+    proxies:
+      - CH Nodes
+      - BE Nodes
+      - RU Nodes
+      - Auto
+      - Manual
+
+  - name: Discord
+    type: select
+    proxies:
+      - CH Nodes
+      - BE Nodes
+      - Auto
+      - Manual
+
+  - name: AI
+    type: select
+    proxies:
+      - CH Nodes
+      - BE Nodes
+      - Auto
+      - Manual
+
+  - name: YouTube
+    type: select
+    proxies:
+      - CH Nodes
+      - BE Nodes
+      - Auto
+      - Manual
+
+  - name: Streaming
+    type: select
+    proxies:
+      - CH Nodes
+      - BE Nodes
+      - Auto
+      - Manual
+
+  - name: GitHub
+    type: select
+    proxies:
+      - CH Nodes
+      - BE Nodes
+      - Auto
+      - Manual
+
+  - name: Social
+    type: select
+    proxies:
+      - CH Nodes
+      - BE Nodes
+      - Auto
+      - Manual
+
+  - name: Steam
+    type: select
+    proxies:
+      - CH Nodes
+      - BE Nodes
+      - Auto
+      - Manual
+
+  - name: Roblox
+    type: select
+    proxies:
+      - CH Nodes
+      - BE Nodes
+      - Auto
+      - Manual
+
+  - name: Games
+    type: select
+    proxies:
+      - CH Nodes
+      - BE Nodes
+      - Auto
+      - Manual
+
+  # --- Blocked ---
+  # Domains from the RKN list that have no service group of their own.
+  - name: RKN Blocked
+    type: select
+    proxies:
+      - CH Nodes
+      - BE Nodes
+      - Auto
+      - Manual
+      - REJECT
+
+  # --- Node pools ---
+  # Swiss servers only.
+  - name: CH Nodes
+    type: select
+    use:
+      - Main
+    filter: '(?i)(?:\x{1F1E8}\x{1F1ED}|\bCH\b|\bSwitzerland\b|\bSwiss\b|\bZurich\b|\bGeneva\b|\x{0428}\x{0432}\x{0435}\x{0439}\x{0446}\x{0430}\x{0440}\x{0438}\x{044F})'
+    exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
+
+  # Belgian servers only.
+  - name: BE Nodes
+    type: select
+    use:
+      - Main
+    filter: '(?i)(?:\x{1F1E7}\x{1F1EA}|\bBE\b|\bBelgium\b|\bBrussels\b|\x{0411}\x{0435}\x{043B}\x{044C}\x{0433}\x{0438}\x{044F})'
+    exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
+
+  # Russian servers. For services that need a Russian IP.
+  - name: RU Nodes
+    type: select
+    use:
+      - Main
+    filter: '(?i)(?:\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})'
+    exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
 
   # Automatic pick of the fastest foreign server. Russian servers are
   # excluded on purpose, see the header.
@@ -415,66 +559,15 @@ proxy-groups:
     url: 'http://cp.cloudflare.com/generate_204'
     interval: 300
     lazy: true
+    hidden: true
 
-  # --- Node pools ---
-  # Russian servers. For services that need a Russian IP.
-  - name: RU Nodes
-    type: select
-    use:
-      - Main
-    filter: '(?i)(?:\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})'
-    exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
-
-  # Every other server, manually selectable.
-  - name: Foreign Nodes
+  # Manual pick of one specific foreign server.
+  - name: Manual
     type: select
     use:
       - Main
     filter: '(?i)^(?!.*(?:\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})).*$'
     exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
-
-  # --- Services ---
-  # Each service group lets you pick a specific node for that service.
-  # Telegram also offers the RU pool: Telegram cares about the exit IP, and a
-  # Russian exit is fine for it. Discord and AI deliberately do NOT offer it:
-  # Discord connections from Russian IPs are restricted, and OpenAI /
-  # Anthropic block Russian IPs outright.
-  - name: Telegram
-    type: select
-    proxies:
-      - Proxy
-      - RU Nodes
-    use:
-      - Main
-    filter: '(?i)^(?!.*(?:\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})).*$'
-    exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
-
-  - name: Discord
-    type: select
-    proxies:
-      - Proxy
-    use:
-      - Main
-    filter: '(?i)^(?!.*(?:\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})).*$'
-    exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
-
-  - name: AI
-    type: select
-    proxies:
-      - Proxy
-    use:
-      - Main
-    filter: '(?i)^(?!.*(?:\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})).*$'
-    exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
-
-  # --- Blocked ---
-  # Domains from the RKN list that have no service group of their own.
-  # Default: through the proxy. Switch to REJECT to block them outright.
-  - name: RKN Blocked
-    type: select
-    proxies:
-      - Proxy
-      - REJECT
 
 # ============================== Rules ==============================
 # Order matters: from specific to general.
@@ -498,13 +591,15 @@ rules:
   - RULE-SET,ai-anthropic,AI
   - RULE-SET,ai-gemini,AI
   - RULE-SET,ai-grok,AI
-  - RULE-SET,youtube,Proxy
-  - RULE-SET,streaming,Proxy
-  - RULE-SET,github,Proxy
-  - RULE-SET,games,Proxy
-  - RULE-SET,social,Proxy
-  - RULE-SET,social-fb,Proxy
-  - RULE-SET,social-tw,Proxy
+  - RULE-SET,youtube,YouTube
+  - RULE-SET,streaming,Streaming
+  - RULE-SET,github,GitHub
+  - RULE-SET,steam,Steam
+  - RULE-SET,roblox,Roblox
+  - RULE-SET,games,Games
+  - RULE-SET,social,Social
+  - RULE-SET,social-fb,Social
+  - RULE-SET,social-tw,Social
 
   # 4. Blocked by RKN -> dedicated group (through the proxy by default,
   #    can be switched to REJECT).
@@ -532,5 +627,5 @@ rules:
   # 8. QUIC is blocked: UDP tunnels are unstable, TCP is more reliable.
   - AND,((DST-PORT,443),(NETWORK,UDP)),REJECT
 
-  # 9. Everything else -> through the proxy (default).
-  - MATCH,Proxy
+  # 9. Everything else -> Final group.
+  - MATCH,Final

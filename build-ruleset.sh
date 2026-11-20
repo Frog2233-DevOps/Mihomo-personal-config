@@ -115,6 +115,8 @@ mc geosite github
 mc geosite microsoft
 mc geosite apple
 mc geosite category-games
+mc geosite steam
+mc geosite roblox
 mc geosite category-ai-ru
 mc geosite openai
 mc geosite anthropic
