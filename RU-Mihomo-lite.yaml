@@ -404,17 +404,6 @@ proxy-groups:
       - Manual
       - DIRECT
 
-  # General group for the RKN community / IP rules.
-  - name: Proxy
-    type: select
-    proxies:
-      - CH Nodes
-      - BE Nodes
-      - RU Nodes
-      - Auto
-      - Manual
-      - DIRECT
-
   # --- Services ---
   # Order of choices: countries, then Auto, then Manual (one specific server).
   # Telegram also offers RU Nodes (it only cares about the exit IP). The others
@@ -427,6 +416,7 @@ proxy-groups:
       - RU Nodes
       - Auto
       - Manual
+      - DIRECT
 
   - name: Discord
     type: select
@@ -435,6 +425,7 @@ proxy-groups:
       - BE Nodes
       - Auto
       - Manual
+      - DIRECT
 
   - name: AI
     type: select
@@ -443,6 +434,7 @@ proxy-groups:
       - BE Nodes
       - Auto
       - Manual
+      - DIRECT
 
   - name: YouTube
     type: select
@@ -451,6 +443,7 @@ proxy-groups:
       - BE Nodes
       - Auto
       - Manual
+      - DIRECT
 
   - name: Streaming
     type: select
@@ -459,7 +452,8 @@ proxy-groups:
       - BE Nodes
       - Auto
       - Manual
-
+      - DIRECT
+      
   - name: GitHub
     type: select
     proxies:
@@ -467,6 +461,7 @@ proxy-groups:
       - BE Nodes
       - Auto
       - Manual
+      - DIRECT
 
   - name: Social
     type: select
@@ -475,6 +470,7 @@ proxy-groups:
       - BE Nodes
       - Auto
       - Manual
+      - DIRECT
 
   - name: Steam
     type: select
@@ -483,6 +479,7 @@ proxy-groups:
       - BE Nodes
       - Auto
       - Manual
+      - DIRECT
 
   - name: Roblox
     type: select
@@ -491,6 +488,7 @@ proxy-groups:
       - BE Nodes
       - Auto
       - Manual
+      - DIRECT
 
   - name: Games
     type: select
@@ -499,6 +497,7 @@ proxy-groups:
       - BE Nodes
       - Auto
       - Manual
+      - DIRECT
 
   # --- Blocked ---
   # Domains from the RKN list that have no service group of their own.
@@ -510,23 +509,10 @@ proxy-groups:
       - Auto
       - Manual
       - REJECT
+      - DIRECT
 
   # --- Node pools ---
   # Swiss servers only.
-  - name: CH Nodes
-    type: select
-    use:
-      - Main
-    filter: '(?i)(?:\x{1F1E8}\x{1F1ED}|\bCH\b|\bSwitzerland\b|\bSwiss\b|\bZurich\b|\bGeneva\b|\x{0428}\x{0432}\x{0435}\x{0439}\x{0446}\x{0430}\x{0440}\x{0438}\x{044F})'
-    exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
-
-  # Belgian servers only.
-  - name: BE Nodes
-    type: select
-    use:
-      - Main
-    filter: '(?i)(?:\x{1F1E7}\x{1F1EA}|\bBE\b|\bBelgium\b|\bBrussels\b|\x{0411}\x{0435}\x{043B}\x{044C}\x{0433}\x{0438}\x{044F})'
-    exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
 
   # Russian servers. For services that need a Russian IP.
   - name: RU Nodes
@@ -608,8 +594,8 @@ rules:
   #    first, such a domain would go DIRECT - i.e. straight around the block.
   #    community (restricted by RKN, but not blocked) -> through the proxy too.
   - RULE-SET,rkn-blocked,RKN Blocked
-  - RULE-SET,rkn-community,Proxy
-  - RULE-SET,rkn-blocked-ips,Proxy
+  - RULE-SET,rkn-community,RKN Blocked
+  - RULE-SET,rkn-blocked-ips,RKN Blocked
 
   # 5. Russian AI services -> direct.
   #    These are Russian services (Yandex Alice, rugpt.io and friends). A
