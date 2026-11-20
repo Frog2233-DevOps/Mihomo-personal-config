@@ -22,7 +22,7 @@ the profile cache.
 ## Install
 
 1. Put `RU-Mihomo.yaml` on the router as `/etc/openclash/config/RU-Mihomo.yaml`
-   and put the `ruleset/` folder at `/etc/openclash/ruleset/`.
+   and put the `ruleset/` folder at `/etc/openclash/rule_provider/`.
 2. Put your subscription URL into `proxy-providers` -> `Main` -> `url`
    (the placeholder is `PASTE_SUBSCRIPTION_URL_HERE`), or let OpenClash inject
    it: `RU-Mihomo.conf` substitutes `$EN_KEY1` into that exact path.
