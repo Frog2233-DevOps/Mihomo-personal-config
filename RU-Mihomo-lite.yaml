@@ -397,8 +397,6 @@ proxy-groups:
   - name: Final
     type: select
     proxies:
-      - CH Nodes
-      - BE Nodes
       - RU Nodes
       - Auto
       - Manual
@@ -411,8 +409,6 @@ proxy-groups:
   - name: Telegram
     type: select
     proxies:
-      - CH Nodes
-      - BE Nodes
       - RU Nodes
       - Auto
       - Manual
@@ -421,8 +417,6 @@ proxy-groups:
   - name: Discord
     type: select
     proxies:
-      - CH Nodes
-      - BE Nodes
       - Auto
       - Manual
       - DIRECT
@@ -430,8 +424,6 @@ proxy-groups:
   - name: AI
     type: select
     proxies:
-      - CH Nodes
-      - BE Nodes
       - Auto
       - Manual
       - DIRECT
@@ -439,8 +431,6 @@ proxy-groups:
   - name: YouTube
     type: select
     proxies:
-      - CH Nodes
-      - BE Nodes
       - Auto
       - Manual
       - DIRECT
@@ -448,8 +438,6 @@ proxy-groups:
   - name: Streaming
     type: select
     proxies:
-      - CH Nodes
-      - BE Nodes
       - Auto
       - Manual
       - DIRECT
@@ -457,8 +445,6 @@ proxy-groups:
   - name: GitHub
     type: select
     proxies:
-      - CH Nodes
-      - BE Nodes
       - Auto
       - Manual
       - DIRECT
@@ -466,8 +452,6 @@ proxy-groups:
   - name: Social
     type: select
     proxies:
-      - CH Nodes
-      - BE Nodes
       - Auto
       - Manual
       - DIRECT
@@ -475,8 +459,6 @@ proxy-groups:
   - name: Steam
     type: select
     proxies:
-      - CH Nodes
-      - BE Nodes
       - Auto
       - Manual
       - DIRECT
@@ -484,8 +466,6 @@ proxy-groups:
   - name: Roblox
     type: select
     proxies:
-      - CH Nodes
-      - BE Nodes
       - Auto
       - Manual
       - DIRECT
@@ -493,8 +473,6 @@ proxy-groups:
   - name: Games
     type: select
     proxies:
-      - CH Nodes
-      - BE Nodes
       - Auto
       - Manual
       - DIRECT
@@ -504,8 +482,6 @@ proxy-groups:
   - name: RKN Blocked
     type: select
     proxies:
-      - CH Nodes
-      - BE Nodes
       - Auto
       - Manual
       - REJECT
