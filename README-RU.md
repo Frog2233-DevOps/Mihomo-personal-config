@@ -139,6 +139,7 @@ Lite-вариант существует потому, что список ре�
 | `scripts/make-lite.sh`, `scripts/make-smart.sh` | пересборка вариантов |
 | `scripts/deploy.sh` | копирует конфиг и ruleset'ы на роутер по SSH |
 | `scripts/check-groups.sh` | запуск на роутере: что попало в каждую группу |
+| `scripts/fix-exec.sh`, `scripts/fix-exec.ps1` | mark the scripts as executable (bash and PowerShell) |
 | `scripts/selftest.sh` | `mihomo -t` каждого конфига + проверки фильтров, групп и файлов |
 | `docs/DESIGN.md` | почему принято каждое решение, с замерами |
 | `docs/INSTALL.md` | установка на OpenWrt / OpenClash |
@@ -157,6 +158,28 @@ Lite-вариант существует потому, что список ре�
 | Время старта | 67 мс |
 | Пересборка ruleset'ов | ежедневно, воркфлоу `rulesets.yml` |
 | Флеш, всё вместе | ~46 МБ (OpenClash 10,7 + ядро 25-29 + ruleset'ы 1,5 + дашборд 3-5) |
+
+## Как участвовать
+
+Скрипты в репозитории лежат с исполняемым битом. Если после свежего клона его
+нет (часть инструментов его теряет) — почини один раз:
+
+```sh
+bash scripts/fix-exec.sh          # Git Bash, Linux, macOS
+```
+
+На Windows — PowerShell, в корне репозитория:
+
+```powershell
+.\scripts\fix-exec.ps1
+```
+
+Сами скрипты написаны на bash, запускай их из Git Bash или WSL:
+
+```sh
+bash scripts/build-ruleset.sh
+bash scripts/selftest.sh
+```
 
 ## Откуда берутся списки
 

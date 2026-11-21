@@ -139,6 +139,7 @@ otherwise they keep the old URL.
 | `scripts/make-lite.sh`, `scripts/make-smart.sh` | regenerate the variants |
 | `scripts/deploy.sh` | copies the config and the rule-sets to the router over SSH |
 | `scripts/check-groups.sh` | runs on the router: what ended up in every group |
+| `scripts/fix-exec.sh`, `scripts/fix-exec.ps1` | mark the scripts as executable (bash and PowerShell) |
 | `scripts/selftest.sh` | `mihomo -t` on every config + the checks on the filters, the groups and the files |
 | `docs/DESIGN.md` | why every decision was made, with the measurements |
 | `docs/INSTALL.md` | installation on OpenWrt / OpenClash |
@@ -157,6 +158,28 @@ otherwise they keep the old URL.
 | Start time | 67 ms |
 | Rule-sets rebuilt | daily by `rulesets.yml` |
 | Flash, everything together | ~46 MB (OpenClash 10.7 + core 25-29 + rule-sets 1.5 + dashboard 3-5) |
+
+## Contributing
+
+The scripts are committed with the executable bit. If a fresh clone does not
+have it - some tools drop it - fix it once:
+
+```sh
+bash scripts/fix-exec.sh          # Git Bash, Linux, macOS
+```
+
+On Windows, in PowerShell, in the repository root:
+
+```powershell
+.\scripts\fix-exec.ps1
+```
+
+The scripts themselves are bash, so run them from Git Bash or WSL:
+
+```sh
+bash scripts/build-ruleset.sh
+bash scripts/selftest.sh
+```
 
 ## Sources of the rule lists
 
