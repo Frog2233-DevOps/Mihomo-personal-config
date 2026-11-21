@@ -1,283 +1,162 @@
 # Mihomo personal config — русская версия
 
-Конфиг mihomo / OpenClash для роутера, который стоит в России: российский
-трафик идёт напрямую, заблокированный и зарубежный — через прокси, а всё
-остальное решается списками правил, которые ты собираешь сам.
+Конфиг mihomo / OpenClash для роутера в России: российский трафик идёт
+напрямую, заблокированный и зарубежный — через прокси, всё остальное
+решается списками правил, которые ты собираешь сам.
+
+Никаких моих подписок, никаких моих списков нод, никаких «премиумных»
+endpoint'ов. Одна подписка, один конфиг, 28 ruleset'ов.
 
 Сделан и измерен на **Cudy WR3000S v1** (MT7981BA, 256 МБ RAM, 128 МБ NAND,
-OpenWrt 25.12.x, OpenClash v0.48.002).
+OpenWrt 25.12.x, OpenClash v0.48.002, mihomo v1.19.33). Все цифры ниже
+измерены, а не взяты из чужого README.
 
 English version: [README.md](README.md).
 
-## Что лежит в репозитории
+## Чем этот конфиг отличается
 
-| Путь | Что это |
-|---|---|
-| `RU-Mihomo.yaml` | Основной конфиг. Реклама блокируется. Это тот, который надо использовать. |
-| `RU-Mihomo-lite.yaml` | Генерируется из основного без списка рекламы (~4 МБ меньше RAM). |
-| `RU-Mihomo-smart.yaml` | Генерируется из основного для *smart*-ядра (vernesong/mihomo). |
-| `RU-Mihomo.conf` | Файл перезаписи OpenClash: режим DNS, IPv6 выключен, пароль дашборда. |
-| `lists/custom-domains.list` | **Твои** домены. Для них свой ruleset и своя группа. |
-| `ruleset/` | Собранные rule-set'ы (`.mrs`), 28 файлов, 1,5 МБ. |
-| `scripts/build-ruleset.sh` | Пересобирает `ruleset/` из внешних списков и твоего списка. |
-| `scripts/make-lite.sh` | Пересобирает `RU-Mihomo-lite.yaml`. |
-| `scripts/make-smart.sh` | Пересобирает `RU-Mihomo-smart.yaml`. |
-| `scripts/deploy.sh` | Копирует конфиг и ruleset'ы на роутер по SSH. |
-| `scripts/check-groups.sh` | Запускается на роутере: показывает, что попало в каждую группу. |
-| `scripts/selftest.sh` | Проверяет всё: `mihomo -t`, фильтры, группы, файлы. |
-| `docs/DESIGN.md` | Почему принято каждое решение. Каждое утверждение измерено. |
-| `docs/INSTALL.md` | Установка на OpenWrt / OpenClash по шагам. |
-| `docs/GROUPS.md` | Зачем нужна каждая группа прокси. |
-| `docs/RULESETS.md` | Откуда берутся списки и как они собираются. |
-| `AGENTS.md` | Файл контекста для ИИ-моделей, которые работают с репозиторием. |
-| `.github/workflows/` | Два воркфлоу GitHub: `validate` (проверяет все конфиги при каждом пуше и пул-реквесте) и `rulesets` (ежедневно пересобирает ruleset'ы). |
-| `automation/` | Те же два воркфлоу отдельными файлами — чтобы их можно было смотреть в PR. Меняешь один — меняй и второй: `cp automation/*.yml .github/workflows/` |
-| `README-RU.md` | Эта же документация на русском. |
+**DNS-политика использует локальный rule-set, а не `geosite`.**
+Очевидный способ отправить российские домены к российскому резолверу —
+`nameserver-policy: "geosite:category-ru"`. Но тогда ядро скачивает
+`GeoSite.dat` (4,3 МБ) и держит geosite-матчер в памяти:
 
-## Плейсхолдеры, которые надо заменить
+| | RSS | Старт |
+|---|---|---|
+| `geosite:category-ru` | 86,4 МБ | 4598 мс |
+| `rule-set:ru-domains` (как здесь) | **52,2 МБ** | **67 мс** |
 
-Задать надо ровно две вещи: **ссылку на подписку** и **пароль дашборда**.
-Всё остальное уже имеет рабочие значения по умолчанию.
+Поведение то же, RAM меньше на 34 МБ. Проверено поломкой policy-резолвера:
+российский домен отдаёт SERVFAIL, зарубежный отвечает — в обоих вариантах.
 
-| Файл | Плейсхолдер | Что вписать | Обязательно? |
-|---|---|---|---|
-| `RU-Mihomo.conf` → `SUB_INFO_URL` | `PASTE_SUBSCRIPTION_URL_HERE` | ссылка на подписку | **да** |
-| `RU-Mihomo.conf` → строка `ruby_map_edit` | `PASTE_SUBSCRIPTION_URL_HERE` | та же ссылка на подписку | **да** |
-| `RU-Mihomo.conf` → `DASHBOARD_PASSWORD` | `CHANGE_ME` | свой пароль | **да** |
-| `RU-Mihomo.yaml` → `proxy-providers` → `Main` → `url` | `PASTE_SUBSCRIPTION_URL_HERE` | ссылка на подписку | только если не используешь `RU-Mihomo.conf` |
-| `RU-Mihomo.yaml` → `secret` | `CHANGE_ME` | тот же пароль | нет, OpenClash перезаписывает |
-| `RU-Mihomo.yaml` → `authentication` | `mihomo:CHANGE_ME` | свой пароль | нет, OpenClash подставляет случайный |
-| `lists/custom-domains.list` | — | свои домены, по одному в строке | нет |
+**Списки правил собираются, а не скачиваются.** Списки РКН приходят
+«голыми» доменами (`instagram.com`), а в mihomo голый домен с
+`behavior: domain` матчит **только сам этот домен** — `www.instagram.com`
+проскакивает. Измерено: с голым списком 0 из 12 поддоменов совпало, с
+префиксом `+.` — 12 из 12. Скрипт сборки добавляет префикс перед
+конвертацией в `.mrs`.
 
-Почему пароль дашборда нельзя оставлять пустым: при пустом `secret` API
-mihomo отдаёт `Access-Control-Allow-Origin: *`, то есть **любая** веб-страница,
-открытая в твоей сети, может управлять прокси, читать список соединений и
-менять настройки.
+**Порядок правил выведен из пересечений, а не из вкуса.**
 
-Если ты меняешь ссылку на подписку **в `RU-Mihomo.yaml`**, пересобери два
-производных конфига, иначе в них останется старая ссылка:
+| # | Правило | Почему именно тут |
+|---|---|---|
+| 1 | `private`, `fake-ip-filter` -> DIRECT | сначала локалка |
+| 2 | `custom-domains` -> `⭐ Custom` | **твоё** решение важнее любого списка |
+| 3 | `antiad` -> REJECT | |
+| 4 | сервисные группы | Telegram, Discord и AI-сервисы есть и в списке РКН (13, 22 и 15 пересекающихся доменов) — если правило РКН стоит раньше, выбрать им нод уже нельзя |
+| 5 | `rkn-blocked` -> `🚫 RKN Blocked` | **перед** российскими доменами: `007dom.ru` российский по TLD, но в списке РКН — в обратном порядке он уйдёт напрямую в обход блокировки |
+| 6 | `category-ai-ru` -> DIRECT | это российский AI (Алиса), а не OpenAI |
+| 7 | `ru-domains`, `ru-ips` -> DIRECT | |
+| 8 | `microsoft`, `apple` -> DIRECT | |
+| 9 | `cdn` -> `🌐 CDN` | после российских доменов, чтобы CDN российских сервисов остались напрямую |
+| 10 | QUIC -> REJECT | UDP-туннели нестабильны, TCP надёжнее |
+| 11 | MATCH -> `🎯 Final` | |
 
-```sh
-./scripts/make-lite.sh
-./scripts/make-smart.sh
-```
+**Российские ноды не попадают в автоматические группы.** РКН блокирует
+трафик по российским сетям, поэтому российский exit-IP ничего не
+разблокирует — он ломает ровно те сайты, ради которых этот конфиг и
+существует. В `🎯 Manual` они остаются в один клик.
 
-`RU-Mihomo-lite.yaml` и `RU-Mihomo-smart.yaml` — генерируемые файлы. Руками их
-не правь: следующая сборка перезапишет твои изменения.
+**Никаких тяжёлых регулярок.** В прошлой версии российские ноды
+исключались lookahead-ом (`^(?!.*(?:...)).*$`) — это backtracking-регулярка
+на каждом имени ноды. `exclude-filter` ядро вычитает из `filter`, так что
+обычная альтернатива делает ту же работу.
 
-## Установка
+**YAML-якоря.** Общие куски групп лежат в одном блоке `x-fragments`.
+Проверено на настоящем `YAML.rb` из OpenClash: он раскрывает якоря при
+чтении, сохраняет их при дампе, и результат по-прежнему проходит `mihomo -t`.
 
-### 0. Сначала проверь разметку флеша
+**Настройки безопасности не декоративные.** Пустой секрет дашборда
+заставляет API отдавать `Access-Control-Allow-Origin: *` — любая веб-страница
+в локалке может управлять прокси. Геобазы (16,5 + 4,4 МБ) выключены,
+потому что этот конфиг их никогда не читает. Дашборд не качается, потому что
+ядро распаковывает zip без проверки целостности.
 
-Ядро `mihomo` для arm64 занимает 57,5 МБ, а в UBIFS — 25-29 МБ. Вместе с
-OpenClash, ruby и ruleset'ами оно **не влезает** в стандартную разметку
-роутера с 128 МБ NAND.
+Подробности и замеры: [docs/DESIGN.md](docs/DESIGN.md).
 
-| Разметка | Overlay |
-|---|---|
-| standard | 44 МБ — не влезает |
-| ubootmod | 84,8 МБ — нужна эта |
+## Группы прокси
 
-Если у тебя стандартная разметка, сначала прошей образ `ubootmod`. Процедура
-описана в исходниках OpenWrt:
-`package/boot/uboot-mediatek/patches/468-add-cudy_wr3000s-v1.patch` и
-коммиты [openwrt/openwrt#22625](https://github.com/openwrt/openwrt/pull/22625)
-(вошли в 25.12.4). Официальный образ профиля `cudy_wr3000s-v1-ubootmod`
-есть для 25.12.5 и 25.12.6.
+18 групп, в именах эмодзи. Полное описание — в
+[docs/GROUPS.md](docs/GROUPS.md).
 
-Проверить:
-
-```sh
-df -h /overlay
-```
-
-### 1. Установи OpenClash
-
-OpenClash v0.48.002 публикует и `.apk`, и `.ipk`. На OpenWrt 25.12.6 ставь
-`.apk`:
-
-```sh
-cd /tmp
-wget https://github.com/vernesong/OpenClash/releases/download/v0.48.002/luci-app-openclash-0.48.002.apk
-apk add --allow-untrusted ./luci-app-openclash-0.48.002.apk
-```
-
-Зависимости `.apk` есть в репозиториях 25.12.6 для `aarch64_cortex-a53`:
-`libc`, `dnsmasq-full`, `bash`, `curl`, `ca-bundle`, `ip-full`, `ruby`,
-`ruby-yaml`, `kmod-tun`, `unzip`.
-
-После установки плагин появляется в LuCI: *Сервисы -> OpenClash*. При первом
-старте он генерирует случайный пароль дашборда и секцию `authentication`.
-
-### 2. Скопируй конфиг и ruleset'ы на роутер
-
-Со своего компьютера:
-
-```sh
-ssh root@192.168.1.1 'mkdir -p /etc/openclash/config /etc/openclash/ruleset /etc/openclash/backup'
-scp RU-Mihomo.yaml root@192.168.1.1:/etc/openclash/config/
-scp RU-Mihomo.conf root@192.168.1.1:/etc/openclash/
-scp ruleset/*.mrs  root@192.168.1.1:/etc/openclash/ruleset/
-```
-
-Пути к ruleset'ам в конфиге относительные (`./ruleset/...`) — они
-разрешаются относительно рабочего каталога ядра, а на роутере это
-`/etc/openclash`.
-
-### 3. Впиши подписку и пароль дашборда
-
-Отредактируй `/etc/openclash/RU-Mihomo.conf` на роутере:
-
-```ini
-[General]
-# единственная подписка
-SUB_INFO_URL = https://your-provider/subscription-link
-
-# пароль дашборда и API. НЕ пусто: при пустом секрете API отдаёт
-# "Access-Control-Allow-Origin: *".
-DASHBOARD_PASSWORD = your-own-password
-
-# какой конфиг использовать: RU-Mihomo.yaml (с блокировкой рекламы) или
-# RU-Mihomo-lite.yaml (примерно на 4 МБ меньше RAM, без рекламы)
-CONFIG_FILE = /etc/openclash/config/RU-Mihomo.yaml
-```
-
-Потом импортируй файл перезаписи в LuCI: *OpenClash -> Управление
-конфигурациями -> Скачать конфигурацию*, укажи raw-ссылку на
-`RU-Mihomo.conf` — или положи файл в `/etc/openclash/backup/` и выбери его в
-настройках перезаписи.
-
-Если файл перезаписи не нужен, впиши подписку прямо в `RU-Mihomo.yaml`:
-
-```yaml
-proxy-providers:
-  Main:
-    url: 'https://your-provider/subscription-link'
-```
-
-и задай `secret` и `authentication` сам. Тогда за паролем API следишь ты.
-
-### 4. Запусти и проверь
-
-```sh
-/etc/init.d/openclash restart
-```
-
-Дождись в логе готовности ядра и проверь, что попало в группы:
-
-```sh
-scp scripts/check-groups.sh root@192.168.1.1:/etc/openclash/
-ssh root@192.168.1.1 'sh /etc/openclash/check-groups.sh'
-```
-
-Скрипт печатает каждую группу с её узлами и предупреждает, если в группу
-просочился нод, которым нельзя пользоваться (LTE-сервер, служебный нод), или
-если в автоматической группе оказался российский нод. Нормальный результат:
-
-* `🚀 Auto`, `⚡ Turbo`, `🔁 Failover` — только зарубежные ноды;
-* `🎯 Manual` — все ноды, включая российские, но без LTE и служебных;
-* сервисные группы — `🚀 Auto`, `🎯 Manual`, `DIRECT`.
-
-RAM и флеш:
-
-```sh
-ssh root@192.168.1.1 'ps | grep -i mihomo'      # RSS в последней колонке
-ssh root@192.168.1.1 'df -h /overlay'           # свободный флеш
-ssh root@192.168.1.1 'logread | grep -i mihomo | tail -30'
-```
-
-Ориентиры (154 ноды, zram 168 МБ): lite **52 МБ** RSS, полный **58 МБ** RSS,
-голое ядро ~45 МБ.
-
-### 5. Обновляй ruleset'ы
-
-На роутере через cron (роутеру нужен доступ в интернет к GitHub):
-
-```sh
-crontab -e
-# каждое утро в 5:31
-31 5 * * * /usr/bin/mihomo convert-ruleset ... # см. scripts/build-ruleset.sh
-```
-
-Проще — воркфлоу GitHub Actions в этом репозитории:
-`.github/workflows/rulesets.yml` пересобирает ruleset'ы каждый день и
-коммитит их. Чтобы он ещё и заливал их на роутер, добавь секреты репозитория
-`ROUTER_HOST`, `ROUTER_USER`, `ROUTER_PORT`, `ROUTER_PATH` и
-`SSH_PRIVATE_KEY` — воркфлоу сам вызовет `scripts/deploy.sh`.
-
-Локально:
-
-```sh
-./scripts/build-ruleset.sh
-./scripts/selftest.sh
-```
-
-### 6. Smart-ядро (по желанию)
-
-`RU-Mihomo-smart.yaml` требует форка
-[vernesong/mihomo](https://github.com/vernesong/mihomo/releases): апстрим такой
-тип группы не знает (`unsupported type: smart`).
-
-В OpenClash выставь тип ядра *Smart* — `CORE_TYPE = Smart` в
-`RU-Mihomo.conf` — и положи на роутер `RU-Mihomo-smart.yaml` вместо
-`RU-Mihomo.yaml`.
-
-Модель LightGBM — 9,3 МБ, а `prefer-asn: true` заставляет ядро качать
-`ASN.mmdb` (8,7 МБ). На роутере с маленьким флешем оставь оба выключенными:
-smart-группа ранжирует ноды по собственным замерам и без них.
-
-## Если что-то пошло не так
-
-**В группах нет нод.** Не загрузилась подписка. Смотри
-`logread | grep -i openclash` и URL в `SUB_INFO_URL`. Адреса самих прокси
-резолвятся напрямую (`77.88.8.8`), поэтому сломанный DNS делает недоступной
-всю подписку.
-
-**Правило не срабатывает.** `mihomo -t` не проверяет, существуют ли файлы
-списков. Ищи в логе «rule set ... not found» и прогони
-`./scripts/selftest.sh` — он проверяет файлы.
-
-**Дашборд просит пароль, которого ты не знаешь.** Это `DASHBOARD_PASSWORD` из
-`RU-Mihomo.conf` (или случайный, который OpenClash сгенерил при установке).
-
-**После каждого старта конфиг выглядит иначе.** Это OpenClash: он
-переписывает DNS, `fake-ip-filter`, `hosts`, sniffer и `authentication` при
-каждом старте. Поэтому в `RU-Mihomo.conf` выключена его собственная обработка
-DNS (`ENABLE_CUSTOM_DNS = 0`, `CUSTOM_FAKEIP_FILTER = 0`,
-`CUSTOM_NAME_POLICY = 0`).
-
-**Хочу свой фильтр нод.** Вешай его на *группы*, а не на провайдер:
-OpenClash переписывает фильтры провайдера из своего интерфейса.
-
-**Группы пропали после того, как я заглянул в интерфейс OpenClash.**
-OpenClash пересобирает весь блок `proxy-groups:` из своего хранилища. Не
-создавай группы прокси в интерфейсе, когда используешь этот конфиг.
+| Группа | Тип | Зачем |
+|---|---|---|
+| `🎯 Final` | select | входная точка, цель последнего правила |
+| `🚀 Auto` | url-test | самый быстрый стабильный зарубежный нод |
+| `⚡ Turbo` | url-test | tolerance 0, переключается быстрее — игры и звонки |
+| `🔁 Failover` | fallback | держит первый ответивший нод |
+| `🎯 Manual` | select | один конкретный нод, включая российские |
+| `💬 Telegram` `🎮 Discord` `🤖 AI` | select | выбор нода под сервис |
+| `▶️ YouTube` `🎬 Streaming` `🐙 GitHub` `📱 Social` | select | выбор нода под сервис |
+| `🎮 Steam` `🧱 Roblox` `🕹️ Games` | select | выбор нода под сервис |
+| `🌐 CDN` | select | CDN-хосты крупных провайдеров |
+| `⭐ Custom` | select | **твои** домены, `lists/custom-domains.list` |
+| `🚫 RKN Blocked` | select | заблокированные домены без своего сервиса |
 
 ## Три варианта
 
 | Файл | Реклама | Ядро | RAM (измерено) |
 |---|---|---|---|
 | `RU-Mihomo.yaml` | да | Meta (апстрим) | 58 МБ |
-| `RU-Mihomo-lite.yaml` | нет | Meta (апстрим) | 52 МБ |
+| `RU-Mihomo-lite.yaml` | нет | Meta (апстрим) | **52 МБ** |
 | `RU-Mihomo-smart.yaml` | да | Smart (форк vernesong) | зависит от модели |
 
-Lite-вариант существует потому, что список рекламы — это 102 005 доменов и
-около 4 МБ RAM: на роутере с 128 МБ это важно. Smart-варианту нужен бинарник
-`vernesong/mihomo`, апстрим такой тип группы не знает.
+Lite-вариант существует потому, что список рекламы — 102 005 доменов и
+около 4 МБ RAM. Smart-варианту нужен бинарник `vernesong/mihomo`: апстрим
+такой тип группы не знает.
 
-## Измеренные на роутере цифры
+`RU-Mihomo-lite.yaml` и `RU-Mihomo-smart.yaml` **генерируются**. Правь
+`RU-Mihomo.yaml`, потом:
+
+```sh
+./scripts/make-lite.sh && ./scripts/make-smart.sh
+```
+
+## Плейсхолдеры
+
+Задать надо две вещи, всё остальное уже имеет рабочие значения:
+
+| Файл | Плейсхолдер | Что вписать |
+|---|---|---|
+| `RU-Mihomo.conf` -> `SUB_INFO_URL` | `PASTE_SUBSCRIPTION_URL_HERE` | ссылка на подписку |
+| `RU-Mihomo.conf` -> строка `ruby_map_edit` | `PASTE_SUBSCRIPTION_URL_HERE` | та же ссылка |
+| `RU-Mihomo.conf` -> `DASHBOARD_PASSWORD` | `CHANGE_ME` | свой пароль |
+| `RU-Mihomo.yaml` -> `proxy-providers` -> `Main` -> `url` | `PASTE_SUBSCRIPTION_URL_HERE` | только если не используешь `RU-Mihomo.conf` |
+
+Если меняешь URL в `RU-Mihomo.yaml`, пересобери два производных конфига —
+иначе в них останется старая ссылка.
+
+## Файлы
+
+| Путь | |
+|---|---|
+| `RU-Mihomo.yaml` | основной конфиг, источник истины |
+| `RU-Mihomo-lite.yaml` | генерируется, без списка рекламы |
+| `RU-Mihomo-smart.yaml` | генерируется, под smart-ядро |
+| `RU-Mihomo.conf` | файл перезаписи OpenClash: режим DNS, IPv6 выкл., пароль дашборда |
+| `lists/custom-domains.list` | твои домены -> `ruleset/custom-domains.mrs` -> `⭐ Custom` |
+| `ruleset/` | 28 собранных ruleset'ов, 1,5 МБ |
+| `scripts/build-ruleset.sh` | пересобирает ruleset'ы из внешних списков |
+| `scripts/make-lite.sh`, `scripts/make-smart.sh` | пересборка вариантов |
+| `scripts/deploy.sh` | копирует конфиг и ruleset'ы на роутер по SSH |
+| `scripts/check-groups.sh` | запуск на роутере: что попало в каждую группу |
+| `scripts/selftest.sh` | `mihomo -t` каждого конфига + проверки фильтров, групп и файлов |
+| `docs/DESIGN.md` | почему принято каждое решение, с замерами |
+| `docs/INSTALL.md` | установка на OpenWrt / OpenClash |
+| `docs/GROUPS.md` | зачем нужна каждая группа |
+| `docs/RULESETS.md` | откуда списки и как они собираются |
+| `AGENTS.md` | правила, которые нельзя ломать — для ИИ-моделей и для людей |
+
+## Цифры
 
 | | |
 |---|---|
-| RAM у lite-конфига | 52 МБ RSS (154 ноды) |
-| RAM у полного конфига | 58 МБ RSS |
+| RAM, lite-конфиг | 52 МБ RSS (154 ноды) |
+| RAM, полный конфиг | 58 МБ RSS |
 | Голое ядро, без конфига | 45 МБ RSS |
-| Флеш под ruleset'ы | 1,5 МБ |
-| Флеш под пакет OpenClash | 10,7 МБ |
-| Время старта | 67 мс (без геобазы) |
-
-Геобазы выключены намеренно: `GeoIP.dat` — 16,5 МБ, `GeoSite.dat` — 4,4 МБ, а
-этот конфиг их никогда не читает.
+| Ruleset'ы на флеше | 1,5 МБ |
+| Время старта | 67 мс |
+| Пересборка ruleset'ов | ежедневно, воркфлоу `rulesets.yml` |
+| Флеш, всё вместе | ~46 МБ (OpenClash 10,7 + ядро 25-29 + ruleset'ы 1,5 + дашборд 3-5) |
 
 ## Откуда берутся списки
 
