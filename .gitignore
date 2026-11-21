@@ -1,0 +1,21 @@
+# the cache and the state of the core
+cache.db
+*.db
+ASN.mmdb
+GeoIP.dat
+GeoSite.dat
+proxy_provider/
+provider1.yaml
+
+# the working files of the core
+config.yaml
+*.log
+
+# what the editors leave behind
+*.swp
+*~
+.idea/
+.vscode/
+
+# the local copy of the rules (the compiled .mrs files ARE tracked)
+lists/*.local

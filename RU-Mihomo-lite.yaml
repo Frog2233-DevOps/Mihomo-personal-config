@@ -1,53 +1,17 @@
 # =============================================================================
-#  RU-Mihomo.yaml - mihomo configuration for Russia
+#  RU-Mihomo.yaml - mihomo configuration for a router in Russia
 # =============================================================================
-#  Design notes (all statements below were verified by running the core):
+#  LITE VARIANT: ad blocking is disabled here, the rule-set and the rule
+#  are removed by scripts/make-lite.sh. The full config is RU-Mihomo.yaml.
 #
-#  * All identifiers are ASCII-only. Cyrillic and Chinese characters are gone
-#    from group names, provider names and rule-set names, so nothing depends on
-#    UTF-8 handling in the dashboard, in OpenClash's Ruby rewrite or in the
-#    profile cache.
-#  * No country-specific routing assumptions: no foreign geo tables, no
-#    Chinese node-name filters, no country fan-out. The routing logic is
-#    driven by the Russian lists only.
-#  * Node pools are split in two, not eight:
-#      - RU Nodes       -> Russian servers only (flag RU / RU token / RU words)
-#      - Foreign Nodes  -> everything else
-#    LTE servers and subscription info-nodes are filtered out of every pool.
-#  * Service groups are limited to a few, and each one lets you pick a
-#    specific node for that service.
+#  Where to read what:
+#    docs/DESIGN.md    - every decision and the measurement behind it
+#    docs/GROUPS.md    - what each proxy group is for
+#    docs/RULESETS.md  - where the rule lists come from and how they are built
+#    docs/INSTALL.md   - installation on OpenWrt / OpenClash, step by step
 #
-#  Why Russian servers are NOT in the general pool:
-#    RKN blocks traffic on Russian networks. A Russian exit IP does not
-#    unblock anything, so a Russian node in the auto-select pool would break
-#    exactly the sites this config exists to open. The RU pool is there for
-#    the opposite case - services that need a Russian IP.
-#
-#  Rule order (derived from measurements, not from taste):
-#    1. private / fake-ip-filter  -> DIRECT
-#    2. ads                       -> REJECT
-#    3. service groups            -> before the RKN list, so that a service
-#                                   that is also on the RKN list stays
-#                                   reachable and you can still pick a node
-#    4. RKN blocked               -> dedicated group (Proxy or REJECT)
-#    5. Russian AI services       -> DIRECT (Russian services need a
-#                                   Russian IP, a foreign exit is wrong here)
-#    6. Russia                    -> DIRECT
-#    7. Microsoft / Apple         -> DIRECT
-#    8. QUIC                      -> REJECT (TCP is more stable)
-#    9. everything else           -> Proxy
-#
-#  Verified with mihomo v1.19.33:
-#    - `mihomo -t` passes for this file and for RU-Mihomo-lite.yaml
-#    - rule matching was probed end to end through the local proxy
-#    - `behavior: classical` + `format: mrs` does NOT match (rule is silently
-#      skipped), so every rule-set below uses behavior: domain / ipcidr
-#    - `respect-rules: true` requires a non-empty proxy-server-nameserver
-#
-#  LITE VARIANT: ad blocking is disabled here, see make-lite.sh.
-#
-#  Subscription: exactly one. Put your URL in proxy-providers -> Main, or let
-#  OpenClash inject it (RU-Mihomo.conf substitutes $EN_KEY1).
+#  The long explanations used to live in this file as comments. They are in
+#  docs/DESIGN.md now, so this file stays readable.
 # =============================================================================
 
 mixed-port: 7893
@@ -57,7 +21,8 @@ mode: rule
 log-level: warning
 ipv6: false
 
-# LAN is trusted, WAN is not: the password below is mandatory.
+# LAN clients need credentials for the HTTP/SOCKS port. OpenClash normally
+# replaces this block with its own random password, this is the fallback.
 authentication:
   - mihomo:CHANGE_ME
 skip-auth-prefixes:
@@ -66,15 +31,10 @@ skip-auth-prefixes:
   - 10.0.0.0/8
   - 172.16.0.0/12
 
-# One timing method for everything, so url-test/fallback compare RTT and not
-# different handshake types.
+# One timing method for everything, so url-test compares RTT and not different
+# handshake types.
 unified-delay: true
-
-# Parallel connections to the same node: noticeably faster for many small
-# requests (web, APIs), slightly more CPU.
 tcp-concurrent: true
-
-# Keep-alive: do not drop connections too early, fewer handshakes.
 keep-alive-interval: 30
 keep-alive-idle: 600
 
@@ -86,21 +46,31 @@ profile:
   store-selected: true
   store-fake-ip: true
 
-# --- Geo data ---
-# mmdb instead of .dat: less memory, faster load.
+# Geo databases are not used: every rule below points at a local .mrs file.
+# geo-auto-update stays off so the core does not pull GeoIP.dat (16.5 MB) and
+# GeoSite.dat (4.4 MB) into a router with 84.8 MB of flash.
 geodata-mode: false
 geodata-loader: memconservative
-geo-auto-update: true
-geo-update-interval: 24
+geo-auto-update: false
 
 external-controller: 0.0.0.0:9090
+# OpenClash overwrites this with the value of DASHBOARD_PASSWORD from
+# RU-Mihomo.conf. Never leave it empty: an empty secret makes the API answer
+# with "Access-Control-Allow-Origin: *", i.e. any web page in the LAN can
+# drive the proxy.
 secret: CHANGE_ME
+
+# The dashboard comes from OpenClash (/usr/share/openclash/ui). No
+# external-ui-url here on purpose: the core downloads and unpacks that zip
+# without any integrity check.
 external-ui: ui
-external-ui-url: "https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip"
+
+# No cross-origin access to the API from a web page.
+external-controller-cors:
+  allow-origins: []
+  allow-private-network: false
 
 # ============================== DNS ==============================
-# Scheme: blocked-in-Russia names are resolved through the proxy route
-# (otherwise DNS poisoning or a block by IP), Russian names resolve directly.
 dns:
   enable: true
   listen: 0.0.0.0:1053
@@ -109,22 +79,18 @@ dns:
   fake-ip-range: 198.18.0.1/16
   use-hosts: true
 
-  # Respect routing rules while resolving.
-  # Requires a non-empty proxy-server-nameserver, otherwise the core refuses
-  # to start.
+  # Resolve through the routing rules. Needs a non-empty
+  # proxy-server-nameserver, otherwise the core refuses to start.
   respect-rules: true
 
-  # Main resolvers: DoH over the proxy route.
-  # Cloudflare (1.1.1.1) and Quad9 (9.9.9.9) answer from Russia and are not
-  # censored. Written as IPs, not hostnames: resolving a hostname needs a
-  # resolver in the first place (chicken-and-egg).
+  # Main resolvers, DoH by IP: resolving a hostname needs a resolver in the
+  # first place.
   nameserver:
     - https://1.1.1.1/dns-query
     - https://9.9.9.9/dns-query
 
-  # Resolving the proxy servers themselves - direct, otherwise the
-  # subscription never loads.
-  # 77.88.8.8 is Yandex DNS, answers reliably from Russia.
+  # The proxy servers themselves - direct, otherwise the subscription never
+  # loads. 77.88.8.8 is Yandex DNS and answers reliably from Russia.
   proxy-server-nameserver:
     - https://77.88.8.8/dns-query
     - https://8.8.8.8/dns-query
@@ -134,25 +100,18 @@ dns:
     - https://77.88.8.8/dns-query
     - https://8.8.8.8/dns-query
 
-  # Per-category resolvers.
-  # Russian domains resolve through Yandex DNS directly, without the proxy:
-  # otherwise the answer comes from outside Russia and you get the RKN stub.
+  # Russian domains resolve through Yandex DNS directly, otherwise the answer
+  # comes from outside Russia and you get the RKN stub.
   #
-  # The key is a LOCAL rule-set, not "geosite:category-ru".
-  # Measured on Cudy WR3000S (MT7981, 256 MB RAM) with mihomo arm64:
-  #   geosite:category-ru  -> the core downloads GeoSite.dat (4.3 MB) and keeps
-  #                           the whole geosite matcher in RAM: RSS 86 MB
-  #   rule-set:ru-domains  -> same behaviour, no GeoSite.dat at all: RSS 52 MB
-  # The behaviour is identical - checked by breaking the policy resolver:
-  # a RU domain then fails with SERVFAIL and a foreign one resolves, in both
-  # variants. mihomo supports "rule-set:" in nameserver-policy (config.go).
+  # The key is a LOCAL rule-set, not "geosite:category-ru": the latter makes
+  # the core download GeoSite.dat and keep the geosite matcher in RAM
+  # (86 MB RSS instead of 52 MB, measured on a Cudy WR3000S).
   nameserver-policy:
     'rule-set:ru-domains':
       - https://77.88.8.8/dns-query
 
   # What must NOT get a fake-ip: LAN, NTP, mDNS, push services.
-  # fake-ip-filter accepts DOMAIN rule-sets only; an IP rule-set here makes
-  # the core fail to start.
+  # fake-ip-filter accepts DOMAIN rule-sets only.
   fake-ip-filter:
     - rule-set:fake-ip-filter
     - '+.lan'
@@ -170,8 +129,8 @@ dns:
     - '+.microsoft.com'
 
 # ============================== TUN ==============================
-# Enable only if the router has no tproxy/redir.
-# On OpenWrt with OpenClash, tproxy/redir is usually the better choice.
+# Enable only if the router has no tproxy/redir. On OpenWrt with OpenClash,
+# tproxy/redir is usually the better choice.
 tun:
   enable: false
   stack: mixed
@@ -183,8 +142,8 @@ tun:
   auto-detect-interface: true
 
 # ============================== Sniffer ==============================
-# Recover the domain from TLS SNI / HTTP Host, even for connections made to
-# an IP. Without this, domain rules do not fire for IP connections.
+# Recover the domain from TLS SNI / HTTP Host, even for connections made to an
+# IP. Without this, domain rules do not fire for IP connections.
 sniffer:
   enable: true
   override-destination: false
@@ -205,32 +164,52 @@ experimental:
   quic-go-disable-gso: true
 
 # =============================================================================
-#  Node pools
+#  Fragments
 # =============================================================================
-#  Regexes used by the groups below.
+#  YAML anchors: the blocks below are defined once and reused. OpenClash
+#  rewrites the config with Ruby's YAML.rb (Psych), which resolves anchors on
+#  load and keeps them on dump - verified against the real YAML.rb of
+#  OpenClash v0.48.002.
 #
-#  RU_MATCH      matches a Russian server.
-#                The flag is written as \x{1F1F7}\x{1F1FA} (the regional
-#                indicator pair R+U) and the Russian words are written as
-#                \x{...} escapes, so this file stays pure ASCII while still
-#                matching Cyrillic node names.
-#                NOTE: \p{IsCyrillic} must NOT be used - it crashes mihomo
-#                v1.19.33 with a panic in the regexp compiler.
+#  Only plain aliases are used (no "<<:" merge keys), so the file also stays
+#  readable for tools that do not implement merge keys.
 #
-#  FOREIGN_MATCH the exact complement of RU_MATCH (verified: a node is in
-#                exactly one of the two pools).
-#
-#  EXCLUDE       drops LTE servers and subscription info-nodes (traffic
-#                counters, expiry dates, plan names) from every pool.
-#
-#  The filters live on the GROUPS, not on the provider: OpenClash rewrites
-#  provider-level filter/exclude-filter when a node filter is configured in
-#  its UI, which would silently disable this logic.
-#
-#  If your provider names servers differently, edit RU_MATCH / EXCLUDE here
-#  and check-groups.sh on the router shows the result.
+#  The filters live on the GROUPS, never on the provider: OpenClash rewrites
+#  provider-level filter/exclude-filter from its own UI, which would silently
+#  disable this logic.
 # =============================================================================
+x-fragments:
+  # The probe URL for every automatic group.
+  probe-url: &probe-url 'http://cp.cloudflare.com/generate_204'
+  probe-interval: &probe-interval 300
+  probe-tolerance: &probe-tolerance 50
 
+  # Nodes that must never be used as a proxy: LTE/4G servers and the
+  # subscription "info" nodes (traffic counters, expiry, tariffs).
+  # The Russian words are written as \x{...} escapes so this file stays
+  # readable in any editor.
+  # NOTE: \p{IsCyrillic} must NOT be used - it crashes mihomo v1.19.33.
+  noise-filter: &noise-filter '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{043F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
+
+  # Markers of a Russian exit node. A Russian exit IP does not unblock
+  # anything, so the automatic groups exclude these nodes.
+  # The flag is written as \x{1F1F7}\x{1F1FA} (the regional indicator pair).
+  ru-filter: &ru-filter '(?i)(?:\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})'
+
+  # noise-filter + ru-filter in one pattern: the automatic groups need both.
+  # Keep the first part identical to noise-filter - scripts/selftest.sh checks
+  # that.
+  foreign-filter: &foreign-filter '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{043F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439}|\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})'
+
+  # The choice list shared by the service groups.
+  service-choices: &service-choices
+    - "🚀 Auto"
+    - "🎯 Manual"
+    - DIRECT
+
+# ============================== Provider ==============================
+# Exactly one subscription. Put the URL here, or let OpenClash substitute it
+# (RU-Mihomo.conf does that through SUB_INFO_URL).
 proxy-providers:
   Main:
     type: http
@@ -248,7 +227,10 @@ proxy-providers:
 
 # ============================== Rule providers ==============================
 # Format mrs with the matching behavior. All files are local (./ruleset/),
-# build-ruleset.sh creates and refreshes them.
+# scripts/build-ruleset.sh creates and refreshes them.
+#
+# Do not set behavior: classical with format: mrs - such a rule is silently
+# skipped by the core.
 rule-providers:
   # --- Russia: own content -> direct ---
   ru-domains:
@@ -262,13 +244,20 @@ rule-providers:
     format: mrs
     path: ./ruleset/ru.mrs
 
+  # --- Your own domains ---
+  # Built from lists/custom-domains.list. The rule sits above the ad list and
+  # above the RKN list, so an explicit decision of yours always wins.
+  custom-domains:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./ruleset/custom-domains.mrs
+
   # --- RKN: blocked -> through the proxy ---
-  # These files are LOCAL on purpose: build-ruleset.sh builds them.
-  # Why not download them directly: the RKN list ships bare domains
-  # ("instagram.com") and in mihomo a bare domain matches ONLY that domain -
-  # "www.instagram.com" slips through. Measured. The script adds the "+."
-  # prefix (DOMAIN-SUFFIX) before converting to mrs, so subdomains match too.
-  # Update with: ./build-ruleset.sh (can be put on cron).
+  # Local on purpose: build-ruleset.sh builds them. The RKN list ships bare
+  # domains ("instagram.com") and in mihomo a bare domain matches ONLY that
+  # exact domain - "www.instagram.com" slips through. The script adds the
+  # "+." prefix (DOMAIN-SUFFIX) before converting to mrs.
   rkn-blocked:
     type: file
     behavior: domain
@@ -285,7 +274,6 @@ rule-providers:
     format: mrs
     path: ./ruleset/rkn-community.mrs
 
-
   # --- Private networks ---
   private:
     type: file
@@ -297,6 +285,15 @@ rule-providers:
     behavior: domain
     format: mrs
     path: ./ruleset/fake-ip-filter.mrs
+
+  # --- CDN ---
+  # CDN hostnames of the big providers. Kept separate so that you can send
+  # them somewhere else (or straight out) with one switch.
+  cdn:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./ruleset/cdn.mrs
 
   # --- Service rule-sets ---
   telegram:
@@ -390,204 +387,188 @@ rule-providers:
     format: mrs
     path: ./ruleset/roblox.mrs
 
+  # --- Ads ---
+
 # ============================== Proxy groups ==============================
 proxy-groups:
-  # --- Entry groups ---
-  # Used only by the final MATCH rule.
-  - name: Final
+  # --- Entry group ---
+  # Used by the final MATCH rule.
+  - name: "🎯 Final"
     type: select
     proxies:
-      - RU Nodes
-      - Auto
-      - Manual
+      - "🚀 Auto"
+      - "⚡ Turbo"
+      - "🔁 Failover"
+      - "🎯 Manual"
       - DIRECT
 
-  # --- Services ---
-  # Order of choices: countries, then Auto, then Manual (one specific server).
-  # Telegram also offers RU Nodes (it only cares about the exit IP). The others
-  # do not: Discord, OpenAI and Anthropic restrict Russian IPs.
-  - name: Telegram
-    type: select
-    proxies:
-      - RU Nodes
-      - Auto
-      - Manual
-      - DIRECT
-
-  - name: Discord
-    type: select
-    proxies:
-      - Auto
-      - Manual
-      - DIRECT
-
-  - name: AI
-    type: select
-    proxies:
-      - Auto
-      - Manual
-      - DIRECT
-
-  - name: YouTube
-    type: select
-    proxies:
-      - Auto
-      - Manual
-      - DIRECT
-
-  - name: Streaming
-    type: select
-    proxies:
-      - Auto
-      - Manual
-      - DIRECT
-      
-  - name: GitHub
-    type: select
-    proxies:
-      - Auto
-      - Manual
-      - DIRECT
-
-  - name: Social
-    type: select
-    proxies:
-      - Auto
-      - Manual
-      - DIRECT
-
-  - name: Steam
-    type: select
-    proxies:
-      - Auto
-      - Manual
-      - DIRECT
-
-  - name: Roblox
-    type: select
-    proxies:
-      - Auto
-      - Manual
-      - DIRECT
-
-  - name: Games
-    type: select
-    proxies:
-      - Auto
-      - Manual
-      - DIRECT
-
-  # --- Blocked ---
-  # Domains from the RKN list that have no service group of their own.
-  - name: RKN Blocked
-    type: select
-    proxies:
-      - Auto
-      - Manual
-      - REJECT
-      - DIRECT
-
-  # --- Node pools ---
-  # Swiss servers only.
-
-  # Russian servers. For services that need a Russian IP.
-  - name: RU Nodes
-    type: select
-    use:
-      - Main
-    filter: '(?i)(?:\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})'
-    exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
-
-  # Automatic pick of the fastest foreign server. Russian servers are
-  # excluded on purpose, see the header.
-  - name: Auto
+  # --- Automatic groups ---
+  # All three exclude the Russian nodes and the LTE/info nodes.
+  - name: "🚀 Auto"
     type: url-test
     use:
       - Main
-    filter: '(?i)^(?!.*(?:\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})).*$'
-    exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
-    url: 'http://cp.cloudflare.com/generate_204'
-    interval: 300
-    tolerance: 50
+    exclude-filter: *foreign-filter
+    url: *probe-url
+    interval: *probe-interval
+    tolerance: *probe-tolerance
+    lazy: true
+
+  # Same as Auto, but every millisecond counts: it switches faster and sticks
+  # to the fastest node even if the difference is small.
+  - name: "⚡ Turbo"
+    type: url-test
+    use:
+      - Main
+    exclude-filter: *foreign-filter
+    url: *probe-url
+    interval: 120
+    tolerance: 0
     lazy: true
 
   # If the current node dies, switch to the next one that answers.
-  - name: Failover
+  - name: "🔁 Failover"
     type: fallback
     use:
       - Main
-    filter: '(?i)^(?!.*(?:\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})).*$'
-    exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
-    url: 'http://cp.cloudflare.com/generate_204'
-    interval: 300
+    exclude-filter: *foreign-filter
+    url: *probe-url
+    interval: *probe-interval
     lazy: true
-    hidden: true
 
-  # Manual pick of one specific foreign server.
-  - name: Manual
+  # --- Manual pick ---
+  # Every node of the subscription, including the Russian ones - the old
+  # "RU Nodes" group is gone, this is its replacement.
+  - name: "🎯 Manual"
     type: select
     use:
       - Main
-    filter: '(?i)^(?!.*(?:\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})).*$'
-    exclude-filter: '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
+    exclude-filter: *noise-filter
+
+  # --- Services ---
+  - name: "💬 Telegram"
+    type: select
+    proxies: *service-choices
+
+  - name: "🎮 Discord"
+    type: select
+    proxies: *service-choices
+
+  - name: "🤖 AI"
+    type: select
+    proxies: *service-choices
+
+  - name: "▶️ YouTube"
+    type: select
+    proxies: *service-choices
+
+  - name: "🎬 Streaming"
+    type: select
+    proxies: *service-choices
+
+  - name: "🐙 GitHub"
+    type: select
+    proxies: *service-choices
+
+  - name: "📱 Social"
+    type: select
+    proxies: *service-choices
+
+  - name: "🎮 Steam"
+    type: select
+    proxies: *service-choices
+
+  - name: "🧱 Roblox"
+    type: select
+    proxies: *service-choices
+
+  - name: "🕹️ Games"
+    type: select
+    proxies: *service-choices
+
+  # --- CDN ---
+  # The CDN hostnames of the big providers. Default: through the proxy, like
+  # everything else. Switch it to DIRECT if you want to save the traffic.
+  - name: "🌐 CDN"
+    type: select
+    proxies: *service-choices
+
+  # --- Your own domains ---
+  # What happens to the domains in lists/custom-domains.list.
+  - name: "⭐ Custom"
+    type: select
+    proxies: *service-choices
+
+  # --- Blocked ---
+  # Domains from the RKN list that have no service group of their own.
+  - name: "🚫 RKN Blocked"
+    type: select
+    proxies:
+      - "🚀 Auto"
+      - "🎯 Manual"
+      - REJECT
+      - DIRECT
 
 # ============================== Rules ==============================
-# Order matters: from specific to general.
+# Order matters: from specific to general. Every statement here was measured,
+# see docs/DESIGN.md.
 rules:
-  # 1. Service and private networks - always first.
+  # 1. LAN and services that must not be proxied.
   - RULE-SET,private,DIRECT
   - RULE-SET,fake-ip-filter,DIRECT
 
-  # 2. Ads - DISABLED in the lite variant (saves about 4 MB of RAM).
+  # 2. Your own domains - the highest priority after the LAN, above the ad
+  #    list and above the RKN list. An explicit decision of yours wins.
+  - RULE-SET,custom-domains,⭐ Custom
 
-  # 3. Service groups - deliberately BEFORE the RKN list.
-  #    Telegram, Discord and the AI services are on the RKN list as well
-  #    (measured: 13, 22 and 15 of their domains overlap). With the RKN rule
-  #    first, choosing a node for those services would be unreachable - and
-  #    for Telegram and Discord that is critical: they need a specific node.
-  #    "RKN Blocked" gets the long tail - everything RKN blocks that has no
-  #    service group of its own.
-  - RULE-SET,telegram,Telegram
-  - RULE-SET,discord,Discord
-  - RULE-SET,ai-openai,AI
-  - RULE-SET,ai-anthropic,AI
-  - RULE-SET,ai-gemini,AI
-  - RULE-SET,ai-grok,AI
-  - RULE-SET,youtube,YouTube
-  - RULE-SET,streaming,Streaming
-  - RULE-SET,github,GitHub
-  - RULE-SET,steam,Steam
-  - RULE-SET,roblox,Roblox
-  - RULE-SET,games,Games
-  - RULE-SET,social,Social
-  - RULE-SET,social-fb,Social
-  - RULE-SET,social-tw,Social
+  # 3. Ads - DISABLED in the lite variant (saves about 4 MB of RAM).
 
-  # 4. Blocked by RKN -> dedicated group (through the proxy by default,
-  #    can be switched to REJECT).
-  #    IMPORTANT: this block is BEFORE the Russian domains. There are domains
-  #    like 007dom.ru: Russian by TLD, but on the RKN list. With ru-domains
-  #    first, such a domain would go DIRECT - i.e. straight around the block.
-  #    community (restricted by RKN, but not blocked) -> through the proxy too.
-  - RULE-SET,rkn-blocked,RKN Blocked
-  - RULE-SET,rkn-community,RKN Blocked
-  - RULE-SET,rkn-blocked-ips,RKN Blocked
+  # 4. Service groups - deliberately BEFORE the RKN list. Telegram, Discord
+  #    and the AI services are on the RKN list as well (measured: 13, 22 and
+  #    15 of their domains overlap). With the RKN rule first, picking a node
+  #    for those services would be unreachable.
+  - RULE-SET,telegram,💬 Telegram
+  - RULE-SET,discord,🎮 Discord
+  - RULE-SET,ai-openai,🤖 AI
+  - RULE-SET,ai-anthropic,🤖 AI
+  - RULE-SET,ai-gemini,🤖 AI
+  - RULE-SET,ai-grok,🤖 AI
+  - RULE-SET,youtube,▶️ YouTube
+  - RULE-SET,streaming,🎬 Streaming
+  - RULE-SET,github,🐙 GitHub
+  - RULE-SET,steam,🎮 Steam
+  - RULE-SET,roblox,🧱 Roblox
+  - RULE-SET,games,🕹️ Games
+  - RULE-SET,social,📱 Social
+  - RULE-SET,social-fb,📱 Social
+  - RULE-SET,social-tw,📱 Social
 
-  # 5. Russian AI services -> direct.
-  #    These are Russian services (Yandex Alice, rugpt.io and friends). A
-  #    foreign exit IP is wrong for them, and they are not on the RKN list.
+  # 5. Blocked by RKN -> dedicated group (through the proxy by default, can
+  #    be switched to REJECT).
+  #    This block is BEFORE the Russian domains: there are domains like
+  #    007dom.ru - Russian by TLD, but on the RKN list. With ru-domains
+  #    first, such a domain would go DIRECT, i.e. straight around the block.
+  - RULE-SET,rkn-blocked,🚫 RKN Blocked
+  - RULE-SET,rkn-community,🚫 RKN Blocked
+  - RULE-SET,rkn-blocked-ips,🚫 RKN Blocked
+
+  # 6. Russian AI services -> direct. These are Russian services (Yandex
+  #    Alice and friends), a foreign exit IP is wrong for them.
   - RULE-SET,ai,DIRECT
 
-  # 6. Russia -> direct.
+  # 7. Russia -> direct.
   - RULE-SET,ru-domains,DIRECT
   - RULE-SET,ru-ips,DIRECT
 
-  # 7. Microsoft and Apple are reachable directly from Russia.
+  # 8. Microsoft and Apple are reachable directly from Russia.
   - RULE-SET,microsoft,DIRECT
   - RULE-SET,apple,DIRECT
 
-  # 8. QUIC is blocked: UDP tunnels are unstable, TCP is more reliable.
+  # 9. CDN -> its own group, so that you can send it somewhere else.
+  - RULE-SET,cdn,🌐 CDN
+
+  # 10. QUIC is blocked: UDP tunnels are unstable, TCP is more reliable.
   - AND,((DST-PORT,443),(NETWORK,UDP)),REJECT
 
-  # 9. Everything else -> Final group.
-  - MATCH,Final
+  # 11. Everything else -> the entry group.
+  - MATCH,🎯 Final

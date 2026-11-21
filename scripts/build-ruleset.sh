@@ -1,23 +1,49 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  build-ruleset.sh - generate the mrs rule files for RU-Mihomo
+#  build-ruleset.sh - build the .mrs rule files for RU-Mihomo
 # =============================================================================
-#  Why this is needed:
-#    The RKN lists (refilter) contain bare domains ("instagram.com").
-#    In mihomo a bare domain with behavior: domain matches ONLY that exact
+#  Why this script and not plain downloads:
+#    The RKN lists (refilter) contain bare domains ("instagram.com"). In
+#    mihomo a bare domain with behavior: domain matches ONLY that exact
 #    domain - "www.instagram.com" slips through. Measured, not assumed.
 #    So every bare entry gets the "+." prefix (-> DOMAIN-SUFFIX) before the
 #    conversion to mrs, and subdomains match as well.
 #
+#  It also builds the rule-set from lists/custom-domains.list and fetches the
+#  ready-made mrs files from MetaCubeX.
+#
 #  Requires: mihomo (for convert-ruleset) and network access.
-#  Usage:     ./build-ruleset.sh [output_dir]
+#  Usage:     ./scripts/build-ruleset.sh [output_dir]
+#
+#  Run it from the repository root, or with an explicit output directory:
+#      ./scripts/build-ruleset.sh ./ruleset
+#
+#  On a router without internet access to GitHub, run it on a PC and copy the
+#  ruleset/ folder over (scripts/deploy.sh does that).
 # =============================================================================
 set -u
 
-OUT="${1:-./ruleset}"
-MIHOMO="${MIHOMO:-mihomo}"
+DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$DIR/.." && pwd)"
+OUT="${1:-$ROOT/ruleset}"
+CUSTOM_LIST="${CUSTOM_LIST:-$ROOT/lists/custom-domains.list}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
+
+# Find the core: the PATH first, then the repository root (the CI downloads it
+# there). The script must not depend on being executable itself.
+MIHOMO="${MIHOMO:-}"
+if [ -z "$MIHOMO" ]; then
+  if command -v mihomo >/dev/null 2>&1; then
+    MIHOMO="$(command -v mihomo)"
+  elif [ -x "$ROOT/mihomo" ]; then
+    MIHOMO="$ROOT/mihomo"
+  else
+    echo "ERROR: mihomo not found. Put it in the PATH or in the repository root,"
+    echo "       or set MIHOMO=/path/to/mihomo."
+    exit 1
+  fi
+fi
 
 mkdir -p "$OUT"
 
@@ -66,7 +92,7 @@ normalize() { # normalize <in> <out>
       if (line ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/) { next }
       print "+." line
     }
-  ' "$1" | sort -u > "$2"
+    ' "$1" | sort -u > "$2"
 }
 
 normalize "$WORK/rkn.lst"       "$WORK/rkn.norm"
@@ -75,6 +101,22 @@ normalize "$WORK/antiad.txt"    "$WORK/antiad.norm"
 log "rkn (after normalisation)"      "$(wc -l < "$WORK/rkn.norm")"
 log "community (after normalisation)" "$(wc -l < "$WORK/community.norm")"
 log "antiad (after normalisation)"    "$(wc -l < "$WORK/antiad.norm")"
+
+# Your own list
+if [ -f "$CUSTOM_LIST" ]; then
+  normalize "$CUSTOM_LIST" "$WORK/custom.norm"
+  log "custom-domains.list" "$(wc -l < "$WORK/custom.norm") domains"
+  if [ ! -s "$WORK/custom.norm" ]; then
+    # mihomo panics with "empty rule" on an empty list and leaves a 0 byte
+    # file behind, which the core then fails to load. Use a reserved domain
+    # that can never resolve (RFC 2606) so the rule-set stays valid.
+    echo "DOMAIN-SUFFIX,custom-domains.invalid" > "$WORK/custom.norm"
+    echo "  NOTE: $CUSTOM_LIST is empty - a placeholder rule is used."
+  fi
+else
+  echo "ERROR: $CUSTOM_LIST not found"
+  exit 1
+fi
 
 # --- 3. Convert to mrs --------------------------------------------------------
 step "3. Converting to mrs (behavior: domain / ipcidr)"
@@ -93,6 +135,7 @@ convert domain  "$WORK/rkn.norm"       "$OUT/rkn-blocked.mrs"     || exit 1
 convert domain  "$WORK/community.norm" "$OUT/rkn-community.mrs"   || exit 1
 convert domain  "$WORK/antiad.norm"    "$OUT/anti-ad.mrs"        || exit 1
 convert ipcidr  "$WORK/rkn-ip.lst"     "$OUT/rkn-blocked-ip.mrs" || exit 1
+convert domain  "$WORK/custom.norm"    "$OUT/custom-domains.mrs" || exit 1
 
 # --- 4. Copy the ready-made mrs files from MetaCubeX --------------------------
 step "4. Downloading ready-made mrs files from MetaCubeX"
@@ -102,6 +145,7 @@ mc() { # mc <category> <file>
   if [ -s "$OUT/$2.mrs" ]; then log "$2.mrs" "$(du -h "$OUT/$2.mrs" | cut -f1)"
   else log "$2.mrs" "ERROR"; rm -f "$OUT/$2.mrs"; fi
 }
+
 mc geosite category-ru
 mc geoip   ru
 mc geosite telegram
@@ -122,6 +166,10 @@ mc geosite openai
 mc geosite anthropic
 mc geosite google-gemini
 mc geosite xai
+# CDN of the big providers, without the Chinese ones.
+mc geosite 'category-cdn-!cn'
+mv "$OUT/category-cdn-!cn.mrs" "$OUT/cdn.mrs" 2>/dev/null
+log "cdn.mrs" "$(du -h "$OUT/cdn.mrs" 2>/dev/null | cut -f1)"
 mc geoip   private
 
 fetch "https://raw.githubusercontent.com/HenryChiao/mihomo_yamls/refs/heads/ruleset/meta/domain/fake-ip-filter.mrs" "$OUT/fake-ip-filter.mrs"
