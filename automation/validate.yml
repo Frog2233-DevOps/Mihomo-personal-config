@@ -42,10 +42,7 @@ jobs:
           ./mihomo-smart -v
 
       - name: Build the rule-sets
-        run: ./scripts/build-ruleset.sh
+        run: bash ./scripts/build-ruleset.sh
 
       - name: Selftest
-        run: ./scripts/selftest.sh
-        env:
-          MIHOMO: ./mihomo
-          MIHOMO_SMART: ./mihomo-smart
+        run: bash ./scripts/selftest.sh

@@ -21,8 +21,24 @@ set -u
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$DIR/.." && pwd)"
-MIHOMO="${MIHOMO:-mihomo}"
-MIHOMO_SMART="${MIHOMO_SMART:-mihomo-smart}"
+
+# Find the cores: the PATH first, then the repository root (the CI downloads
+# them there). The script must not depend on being executable itself.
+find_core() { # find_core <name>
+  if [ -n "$2" ] && [ -x "$2" ]; then
+    printf '%s' "$2"; return 0
+  fi
+  if command -v "$1" >/dev/null 2>&1; then
+    command -v "$1"; return 0
+  fi
+  if [ -x "$ROOT/$1" ]; then
+    printf '%s' "$ROOT/$1"; return 0
+  fi
+  printf ''
+}
+
+MIHOMO="$(find_core mihomo "${MIHOMO:-}")"
+MIHOMO_SMART="$(find_core mihomo-smart "${MIHOMO_SMART:-}")"
 
 cd "$ROOT"
 
@@ -30,7 +46,7 @@ rc=0
 
 echo "=== 1. mihomo -t ==="
 for f in RU-Mihomo.yaml RU-Mihomo-lite.yaml; do
-  if command -v "$MIHOMO" >/dev/null 2>&1 || [ -x "$MIHOMO" ]; then
+  if [ -n "$MIHOMO" ] && [ -x "$MIHOMO" ]; then
     if out="$("$MIHOMO" -t -f "$f" -d . 2>&1)"; then
       echo "  OK   $f"
     else
@@ -39,11 +55,11 @@ for f in RU-Mihomo.yaml RU-Mihomo-lite.yaml; do
       rc=1
     fi
   else
-    echo "  SKIP $f (no mihomo binary: set MIHOMO=...)"
+    echo "  SKIP $f (no mihomo binary: put it in the PATH or in the repo root)"
   fi
 done
 
-if command -v "$MIHOMO_SMART" >/dev/null 2>&1 || [ -x "$MIHOMO_SMART" ]; then
+if [ -n "$MIHOMO_SMART" ] && [ -x "$MIHOMO_SMART" ]; then
   if out="$("$MIHOMO_SMART" -t -f RU-Mihomo-smart.yaml -d . 2>&1)"; then
     echo "  OK   RU-Mihomo-smart.yaml"
   else
@@ -52,7 +68,7 @@ if command -v "$MIHOMO_SMART" >/dev/null 2>&1 || [ -x "$MIHOMO_SMART" ]; then
     rc=1
   fi
 else
-  echo "  SKIP RU-Mihomo-smart.yaml (no smart core: set MIHOMO_SMART=...)"
+  echo "  SKIP RU-Mihomo-smart.yaml (no smart core: put it in the PATH or in the repo root)"
 fi
 
 echo

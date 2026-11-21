@@ -27,9 +27,23 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$DIR/.." && pwd)"
 OUT="${1:-$ROOT/ruleset}"
 CUSTOM_LIST="${CUSTOM_LIST:-$ROOT/lists/custom-domains.list}"
-MIHOMO="${MIHOMO:-mihomo}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
+
+# Find the core: the PATH first, then the repository root (the CI downloads it
+# there). The script must not depend on being executable itself.
+MIHOMO="${MIHOMO:-}"
+if [ -z "$MIHOMO" ]; then
+  if command -v mihomo >/dev/null 2>&1; then
+    MIHOMO="$(command -v mihomo)"
+  elif [ -x "$ROOT/mihomo" ]; then
+    MIHOMO="$ROOT/mihomo"
+  else
+    echo "ERROR: mihomo not found. Put it in the PATH or in the repository root,"
+    echo "       or set MIHOMO=/path/to/mihomo."
+    exit 1
+  fi
+fi
 
 mkdir -p "$OUT"
 

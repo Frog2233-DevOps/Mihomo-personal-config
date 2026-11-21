@@ -27,12 +27,10 @@ jobs:
           chmod +x mihomo
 
       - name: Rebuild the rule-sets
-        run: ./scripts/build-ruleset.sh
+        run: bash ./scripts/build-ruleset.sh
 
       - name: Selftest
-        run: ./scripts/selftest.sh
-        env:
-          MIHOMO: ./mihomo
+        run: bash ./scripts/selftest.sh
 
       - name: Commit the new rule-sets
         # the guard stops the loop: the commit of this step triggers the
@@ -77,4 +75,4 @@ jobs:
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           export SSH_KEY=~/.ssh/deploy_key
-          ./scripts/deploy.sh
+          bash ./scripts/deploy.sh
