@@ -11,7 +11,7 @@
 #
 #  Environment variables:
 #      API      - address of the mihomo API (default: 127.0.0.1:9090)
-#      SECRET   - dashboard password (default: from OPENCLASH secret file)
+#      SECRET   - dashboard password (default: from /etc/openclash/secret)
 #
 #  Only busybox tools are used, so it runs on OpenWrt as it is.
 # =============================================================================
@@ -24,28 +24,22 @@ if [ -z "$SECRET" ] && [ -f /etc/openclash/secret ]; then
 fi
 
 TMP="/tmp/oc_groups.$$.json"
-trap 'rm -f "$TMP" "$TMP.lines"' EXIT
+trap 'rm -f "$TMP"' EXIT
 
 # OpenClash installs curl as a dependency, but a plain OpenWrt has only
 # uclient-fetch - use whatever is there.
 if command -v curl >/dev/null 2>&1; then
-  fetch() {
-    if [ -n "$SECRET" ]; then
-      curl -s -m 10 -H "Authorization: Bearer $SECRET" "http://$API/proxies" -o "$TMP"
-    else
-      curl -s -m 10 "http://$API/proxies" -o "$TMP"
-    fi
-  }
+  if [ -n "$SECRET" ]; then
+    curl -s -m 10 -H "Authorization: Bearer $SECRET" "http://$API/proxies" -o "$TMP"
+  else
+    curl -s -m 10 "http://$API/proxies" -o "$TMP"
+  fi
 elif command -v uclient-fetch >/dev/null 2>&1; then
-  fetch() {
-    uclient-fetch -q -T 10 -o "$TMP" "http://$API/proxies"
-  }
+  uclient-fetch -q -T 10 -o "$TMP" "http://$API/proxies"
 else
   echo "ERROR: neither curl nor uclient-fetch is available"
   exit 1
 fi
-
-fetch
 
 if [ ! -s "$TMP" ]; then
   echo "ERROR: no answer from http://$API/proxies"
@@ -53,21 +47,23 @@ if [ ! -s "$TMP" ]; then
   exit 1
 fi
 
-# One group per line.
-tr ',' '\n' < "$TMP" | sed 's/^{//; s/}$//' > "$TMP.lines"
+# The members of one group. The API returns the fields of a proxy in
+# alphabetical order, so the array "all" comes right after the name.
+members_of() { # members_of <group name>
+  sed -n "s/.*\"$1\":{[^[]*\"all\":\[\([^]]*\)\].*/\1/p" "$TMP" | head -1 \
+    | tr ',' '\n' | sed 's/^"//; s/"$//' | grep -v '^$'
+}
 
 show() { # show <group name>
   name="$1"
-  line="$(grep -F "\"$name\":" "$TMP.lines" | head -n 1)"
-  if [ -z "$line" ]; then
+  members="$(members_of "$name")"
+  if [ -z "$members" ]; then
     printf '  %-16s NOT FOUND\n' "$name"
     return
   fi
-  members="$(printf '%s' "$line" | sed -n 's/.*"all":\[\([^]]*\)\].*/\1/p' \
-             | tr ',' '\n' | sed 's/^"//; s/"$//' | grep -v '^$' | wc -l)"
-  printf '  %-16s %s node(s)\n' "$name" "$members"
-  printf '%s' "$line" | sed -n 's/.*"all":\[\([^]]*\)\].*/\1/p' \
-    | tr ',' '\n' | sed 's/^"//; s/"$//' | sed 's/^/      /'
+  count="$(printf '%s\n' "$members" | grep -c .)"
+  printf '  %-16s %s node(s)\n' "$name" "$count"
+  printf '%s\n' "$members" | sed 's/^/      /'
 }
 
 echo "=== Proxy groups ==="
@@ -80,9 +76,16 @@ done
 
 echo
 echo "=== Warnings ==="
-bad="$(grep -o '"[^"]*"' "$TMP.lines" \
-       | grep -Ei 'LTE|\b4G\b|Mobile|Expiry|Expires|Traffic|Balance|Тариф|Остаток' \
-       | sort -u)"
+
+# Every member of every group.
+all_members() {
+  grep -o '"all":\[[^]]*\]' "$TMP" | sed 's/"all":\[//; s/\]//' \
+    | tr ',' '\n' | sed 's/^"//; s/"$//' | grep -v '^$'
+}
+
+# \b is a GNU extension and busybox grep does not know it - spell the word
+# boundaries out.
+bad="$(all_members | grep -Ei 'LTE|(^|[^0-9A-Za-z])4G([^0-9A-Za-z]|$)|Mobile|MTS|Beeline|MegaFon|Tele2|Expiry|Expires|Traffic|Balance|Тариф|Остаток' | sort -u)"
 if [ -n "$bad" ]; then
   echo "  These nodes must not be in any group:"
   printf '%s\n' "$bad" | sed 's/^/      /'
@@ -90,12 +93,11 @@ else
   echo "  OK: no LTE / info nodes in the groups"
 fi
 
-ru_in_auto=0
+ru_warning=0
 for g in "🚀 Auto" "⚡ Turbo" "🔁 Failover"; do
-  line="$(grep -F "\"$g\":" "$TMP.lines" | head -n 1)"
-  if printf '%s' "$line" | grep -qiE '🇷🇺|"RU |Russia'; then
+  if members_of "$g" | grep -qiE '🇷🇺|^RU |Russia|Москва'; then
     echo "  WARNING: a Russian node is in the group '$g'"
-    ru_in_auto=1
+    ru_warning=1
   fi
 done
-[ "$ru_in_auto" = "0" ] && echo "  OK: no Russian nodes in the automatic groups"
+[ "$ru_warning" = "0" ] && echo "  OK: no Russian nodes in the automatic groups"
