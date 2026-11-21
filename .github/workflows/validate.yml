@@ -1,7 +1,3 @@
-# This file belongs to .github/workflows/ - copy it there:
-#     cp automation/validate.yml .github/workflows/validate.yml
-# It is kept here as well so that the content is reviewable in a pull request.
-
 name: Validate
 
 on:
@@ -31,11 +27,13 @@ jobs:
       - name: Download the smart core
         run: |
           set -e
-          url=$(curl -fsSL "https://api.github.com/repos/vernesong/mihomo/releases/tags/Prerelease-Alpha" \
+          # the name of the asset contains the commit, so it has to be looked up.
+          # A rate limit of the GitHub API must not fail the whole check.
+          url=$(curl -fsSL "https://api.github.com/repos/vernesong/mihomo/releases/tags/Prerelease-Alpha" 2>/dev/null \
                 | grep -o '"browser_download_url": *"[^"]*linux-amd64-alpha-smart[^"]*\.gz"' \
-                | head -1 | cut -d'"' -f4)
+                | head -1 | cut -d'"' -f4 || true)
           if [ -z "$url" ]; then
-            echo "no smart core found - the smart variant is not checked"
+            echo "no smart core found (or the API rate limited us) - the smart variant is not checked"
             exit 0
           fi
           curl -fsSL -o mihomo-smart.gz "$url"
