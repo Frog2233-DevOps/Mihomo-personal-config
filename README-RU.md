@@ -139,6 +139,7 @@ Lite-вариант существует потому, что список ре�
 | `scripts/make-lite.sh`, `scripts/make-smart.sh` | пересборка вариантов |
 | `scripts/deploy.sh` | копирует конфиг и ruleset'ы на роутер по SSH |
 | `scripts/check-groups.sh` | запуск на роутере: что попало в каждую группу |
+| `scripts/update-rulesets.sh` | запуск на роутере: пересобирает ruleset'ы своим же ядром и перезапускает OpenClash - списки обновляются сами |
 | `scripts/fix-exec.sh`, `scripts/fix-exec.ps1` | mark the scripts as executable (bash and PowerShell) |
 | `scripts/selftest.sh` | `mihomo -t` каждого конфига + проверки фильтров, групп и файлов |
 | `docs/DESIGN.md` | почему принято каждое решение, с замерами |

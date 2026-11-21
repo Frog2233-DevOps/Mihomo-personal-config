@@ -114,6 +114,14 @@ are still reachable through `🎯 Manual`.
 * One subscription, `proxy-providers -> Main`. The URL is a placeholder
   (`PASTE_SUBSCRIPTION_URL_HERE`); OpenClash substitutes the real one.
 
+## The rule-sets on the router
+
+The rule-sets are local files and the router refreshes them itself with
+`scripts/update-rulesets.sh` (its own cron, no secrets needed). The build
+script tries the direct link first and then the mirrors - keep that order
+when you add a source: `raw.githubusercontent.com` is not always fast from
+Russia.
+
 ## Adding a new service group
 
 1. Add the rule-set to `scripts/build-ruleset.sh` (and to the download list
