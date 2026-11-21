@@ -41,7 +41,10 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ruleset
+          # the files that came through the API have no executable bit - set it
+          # once here, the commit below carries the mode into the repository
+          chmod +x scripts/*.sh scripts/*.py
+          git add ruleset scripts
           if git diff --staged --quiet; then
             echo "nothing changed"
             exit 0
