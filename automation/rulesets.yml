@@ -1,7 +1,3 @@
-# This file belongs to .github/workflows/ - copy it there:
-#     cp automation/rulesets.yml .github/workflows/rulesets.yml
-# It is kept here as well so that the content is reviewable in a pull request.
-
 name: Rebuild rule-sets
 
 on:
@@ -39,6 +35,10 @@ jobs:
           MIHOMO: ./mihomo
 
       - name: Commit the new rule-sets
+        # the guard stops the loop: the commit of this step triggers the
+        # workflow again, and that run must not commit anything.
+        # On a schedule or a manual run the commit always happens.
+        if: github.event_name != 'push' || github.actor != 'github-actions[bot]'
         run: |
           set -e
           git config user.name "github-actions[bot]"

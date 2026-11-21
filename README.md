@@ -31,6 +31,8 @@ NAND, OpenWrt 25.12.x, OpenClash v0.48.002).
 | `docs/GROUPS.md` | What every proxy group is for. |
 | `docs/RULESETS.md` | Where the rule lists come from and how they are built. |
 | `AGENTS.md` | Context file for AI models working on this repository. |
+| `.github/workflows/` | The two GitHub workflows: `validate` (checks every config on every push and pull request) and `rulesets` (rebuilds the rule-sets daily). |
+| `automation/` | The same two workflows as a reviewable copy. If you change one, change the other: `cp automation/*.yml .github/workflows/` |
 | `README-RU.md` | The same documentation in Russian. |
 
 ## The placeholders you have to replace
