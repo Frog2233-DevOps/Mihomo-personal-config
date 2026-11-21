@@ -27,10 +27,10 @@ jobs:
           chmod +x mihomo
 
       - name: Rebuild the rule-sets
-        run: ./scripts/build-ruleset.sh
+        run: bash ./scripts/build-ruleset.sh
 
       - name: Selftest
-        run: ./scripts/selftest.sh
+        run: bash ./scripts/selftest.sh
         env:
           MIHOMO: ./mihomo
 
@@ -43,7 +43,8 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ruleset
+          chmod +x scripts/*.sh scripts/*.py
+          git add ruleset scripts
           if git diff --staged --quiet; then
             echo "nothing changed"
             exit 0
