@@ -1,0 +1,80 @@
+# This file belongs to .github/workflows/ - copy it there:
+#     cp automation/rulesets.yml .github/workflows/rulesets.yml
+# It is kept here as well so that the content is reviewable in a pull request.
+
+name: Rebuild rule-sets
+
+on:
+  schedule:
+    # every day at 04:23 UTC
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+  push:
+    # every branch: the rule-sets are binary files, they cannot be written by
+    # hand, so the workflow builds them and commits the result
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download mihomo
+        run: |
+          set -e
+          curl -fsSL -o mihomo.gz \
+            "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-compatible-v1.19.33.gz"
+          gunzip -f mihomo.gz
+          chmod +x mihomo
+
+      - name: Rebuild the rule-sets
+        run: ./scripts/build-ruleset.sh
+
+      - name: Selftest
+        run: ./scripts/selftest.sh
+        env:
+          MIHOMO: ./mihomo
+
+      - name: Commit the new rule-sets
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ruleset
+          if git diff --staged --quiet; then
+            echo "nothing changed"
+            exit 0
+          fi
+          git commit -m "chore(ruleset): rebuild $(date -u +%F)"
+          git push
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to the router
+        env:
+          ROUTER_HOST: ${{ secrets.ROUTER_HOST }}
+          ROUTER_USER: ${{ secrets.ROUTER_USER }}
+          ROUTER_PORT: ${{ secrets.ROUTER_PORT }}
+          ROUTER_PATH: ${{ secrets.ROUTER_PATH }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          CONFIG: RU-Mihomo.yaml
+          RESTART: "0"
+        run: |
+          set -e
+          if [ -z "$ROUTER_HOST" ] || [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "ROUTER_HOST / SSH_PRIVATE_KEY are not set - nothing is deployed."
+            echo "Add them as repository secrets to push the rule-sets to the router."
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          export SSH_KEY=~/.ssh/deploy_key
+          ./scripts/deploy.sh
