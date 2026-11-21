@@ -29,6 +29,7 @@ NAND, OpenWrt 25.12.x, OpenClash v0.48.002).
 | `docs/GROUPS.md` | What every proxy group is for. |
 | `docs/RULESETS.md` | Where the rule lists come from and how they are built. |
 | `AGENTS.md` | Context file for AI models working on this repository. |
+| `automation/` | The two GitHub workflows. Copy them into `.github/workflows/`:<br>`cp automation/*.yml .github/workflows/` |
 
 ## Quick start
 
