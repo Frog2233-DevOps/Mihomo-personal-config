@@ -102,6 +102,8 @@ are still reachable through `🎯 Manual`.
 
 ## Style
 
+* `README.md` and `README-RU.md` describe the same thing in two
+  languages. Keep them in sync when you change the installation steps.
 * The file is UTF-8, but everything except the emoji in the group names is
   ASCII. The Russian words in the regexes are written as `\x{...}`.
 * The group names carry an emoji and are quoted: `- name: "🚀 Auto"`.
