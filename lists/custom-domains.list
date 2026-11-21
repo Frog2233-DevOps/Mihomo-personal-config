@@ -1,0 +1,19 @@
+# =============================================================================
+#  custom-domains.list - your own domains
+# =============================================================================
+#  One domain per line. Everything listed here is routed through the
+#  "⭐ Custom" proxy group, and that rule sits ABOVE the ad list and ABOVE the
+#  RKN list - an explicit decision of yours always wins.
+#
+#  Bare domains are enough: the build script adds the "+." prefix
+#  (DOMAIN-SUFFIX), so "example.com" also covers "www.example.com".
+#
+#  Lines starting with "#" and empty lines are ignored.
+#
+#  Rebuild the rule-set after editing:
+#      ./scripts/build-ruleset.sh
+# =============================================================================
+
+# --- examples, replace or delete them ---
+# my-site.ru
+# my-cdn.example.com
