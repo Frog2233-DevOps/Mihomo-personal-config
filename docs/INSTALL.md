@@ -136,21 +136,45 @@ RSS, bare core ~45 MB.
 
 ## 5. Keep the rule-sets fresh
 
-On the router, with a cron job (the router needs internet access to GitHub):
+The rule-sets are **local files** (`type: file`, `./ruleset/*.mrs`). That is
+deliberate: it keeps the core from downloading anything at startup and it is
+what makes the RAM numbers work. The consequence is that somebody has to
+refresh them - and that somebody does not have to be you.
+
+### 5.1 On the router (recommended, no secrets)
+
+The router already has the core that does the conversion. Copy the scripts
+over and let the router refresh the lists itself:
 
 ```sh
-cat >/etc/cron.d/openclash-ruleset <<'EOF'
-30 5 * * * /usr/bin/mihomo convert-ruleset ... # see scripts/build-ruleset.sh
-EOF
+scp scripts/build-ruleset.sh scripts/update-rulesets.sh root@192.168.1.1:/etc/openclash/
+ssh root@192.168.1.1 'chmod +x /etc/openclash/*.sh'
+ssh root@192.168.1.1 '/etc/openclash/update-rulesets.sh'      # the first run
 ```
 
-The easier way is the GitHub Actions workflow in this repository:
-`.github/workflows/rulesets.yml` rebuilds the rule-sets every day and commits
-them. To push them to the router as well, add the repository secrets
-`ROUTER_HOST`, `ROUTER_USER`, `ROUTER_PATH` and `SSH_PRIVATE_KEY` - the
-workflow then calls `scripts/deploy.sh`.
+Then put it into the cron of the router:
 
-Locally:
+```sh
+ssh root@192.168.1.1 "echo '30 5 * * * /etc/openclash/update-rulesets.sh >/tmp/update-rulesets.log 2>&1' > /etc/cron.d/openclash-ruleset"
+```
+
+Every morning the router rebuilds the lists with its own core, installs them
+and restarts OpenClash. If the build fails - no network, a list unreachable -
+**the old lists stay in place** and the log says so. Nothing breaks.
+
+The script tries the direct link first and then the mirrors
+(`cdn.jsdelivr.net`, `gh-proxy.com`, `ghfast.top`), because from Russia
+`raw.githubusercontent.com` is not always fast.
+
+### 5.2 From GitHub Actions
+
+`.github/workflows/rulesets.yml` rebuilds the rule-sets every day and commits
+them to the repository. To push them to the router as well, add the
+repository secrets `ROUTER_HOST`, `ROUTER_USER`, `ROUTER_PORT`,
+`ROUTER_PATH` and `SSH_PRIVATE_KEY` - the workflow then calls
+`scripts/deploy.sh`.
+
+### 5.3 On your computer
 
 ```sh
 ./scripts/build-ruleset.sh

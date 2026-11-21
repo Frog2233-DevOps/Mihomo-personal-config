@@ -139,6 +139,7 @@ otherwise they keep the old URL.
 | `scripts/make-lite.sh`, `scripts/make-smart.sh` | regenerate the variants |
 | `scripts/deploy.sh` | copies the config and the rule-sets to the router over SSH |
 | `scripts/check-groups.sh` | runs on the router: what ended up in every group |
+| `scripts/update-rulesets.sh` | runs on the router: rebuilds the rule-sets with its own core and restarts OpenClash - the lists update themselves |
 | `scripts/fix-exec.sh`, `scripts/fix-exec.ps1` | mark the scripts as executable (bash and PowerShell) |
 | `scripts/selftest.sh` | `mihomo -t` on every config + the checks on the filters, the groups and the files |
 | `docs/DESIGN.md` | why every decision was made, with the measurements |

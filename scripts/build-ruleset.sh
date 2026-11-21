@@ -50,23 +50,46 @@ mkdir -p "$OUT"
 log()  { printf '  %-26s %s\n' "$1" "$2"; }
 step() { printf '\n=== %s ===\n' "$1"; }
 
-fetch() { # fetch <url> <dest>
-  curl -fsSL --retry 3 --retry-delay 2 "$1" -o "$2" 2>/dev/null
+# The direct link first, then the mirrors. From a router in Russia
+# raw.githubusercontent.com is not always fast, and sometimes blocked.
+# fetch <dest> <url> [url ...]
+fetch() {
+  dest="$1"; shift
+  for u in "$@"; do
+    if curl -fsSL --retry 2 --retry-delay 2 --connect-timeout 15 "$u" -o "$dest" 2>/dev/null \
+       && [ -s "$dest" ]; then
+      return 0
+    fi
+  done
+  rm -f "$dest"
+  return 1
 }
 
 # --- 1. Download the source lists --------------------------------------------
 step "1. Downloading source lists"
 
-fetch "https://github.com/1andrevich/Re-filter-lists/releases/latest/download/domains_all.lst" "$WORK/rkn.lst"
+fetch "$WORK/rkn.lst" \
+  "https://github.com/1andrevich/Re-filter-lists/releases/latest/download/domains_all.lst" \
+  "https://ghfast.top/https://github.com/1andrevich/Re-filter-lists/releases/latest/download/domains_all.lst" \
+  "https://gh-proxy.com/https://github.com/1andrevich/Re-filter-lists/releases/latest/download/domains_all.lst"
 log "domains_all.lst" "$(wc -l < "$WORK/rkn.lst" 2>/dev/null || echo MISSING) lines"
 
-fetch "https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/community.lst" "$WORK/community.lst"
+fetch "$WORK/community.lst" \
+  "https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/community.lst" \
+  "https://cdn.jsdelivr.net/gh/1andrevich/Re-filter-lists@main/community.lst" \
+  "https://gh-proxy.com/https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/community.lst"
 log "community.lst" "$(wc -l < "$WORK/community.lst" 2>/dev/null || echo MISSING) lines"
 
-fetch "https://github.com/1andrevich/Re-filter-lists/releases/latest/download/ipsum.lst" "$WORK/rkn-ip.lst"
+fetch "$WORK/rkn-ip.lst" \
+  "https://github.com/1andrevich/Re-filter-lists/releases/latest/download/ipsum.lst" \
+  "https://ghfast.top/https://github.com/1andrevich/Re-filter-lists/releases/latest/download/ipsum.lst" \
+  "https://gh-proxy.com/https://github.com/1andrevich/Re-filter-lists/releases/latest/download/ipsum.lst"
 log "ipsum.lst" "$(wc -l < "$WORK/rkn-ip.lst" 2>/dev/null || echo MISSING) lines"
 
-fetch "https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/master/anti-ad-domains.txt" "$WORK/antiad.txt"
+fetch "$WORK/antiad.txt" \
+  "https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/master/anti-ad-domains.txt" \
+  "https://cdn.jsdelivr.net/gh/privacy-protection-tools/anti-AD@master/anti-ad-domains.txt" \
+  "https://gh-proxy.com/https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/master/anti-ad-domains.txt"
 log "anti-ad-domains.txt" "$(wc -l < "$WORK/antiad.txt" 2>/dev/null || echo MISSING) lines"
 
 for f in rkn community antiad; do
@@ -141,7 +164,11 @@ convert domain  "$WORK/custom.norm"    "$OUT/custom-domains.mrs" || exit 1
 step "4. Downloading ready-made mrs files from MetaCubeX"
 
 mc() { # mc <category> <file>
-  fetch "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/$1/$2.mrs" "$OUT/$2.mrs"
+  fetch "$OUT/$2.mrs" \
+    "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/$1/$2.mrs" \
+    "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/$1/$2.mrs" \
+    "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/$1/$2.mrs" \
+    "https://ghproxy.net/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/$1/$2.mrs"
   if [ -s "$OUT/$2.mrs" ]; then log "$2.mrs" "$(du -h "$OUT/$2.mrs" | cut -f1)"
   else log "$2.mrs" "ERROR"; rm -f "$OUT/$2.mrs"; fi
 }
@@ -172,7 +199,10 @@ mv "$OUT/category-cdn-!cn.mrs" "$OUT/cdn.mrs" 2>/dev/null
 log "cdn.mrs" "$(du -h "$OUT/cdn.mrs" 2>/dev/null | cut -f1)"
 mc geoip   private
 
-fetch "https://raw.githubusercontent.com/HenryChiao/mihomo_yamls/refs/heads/ruleset/meta/domain/fake-ip-filter.mrs" "$OUT/fake-ip-filter.mrs"
+fetch "$OUT/fake-ip-filter.mrs" \
+  "https://raw.githubusercontent.com/HenryChiao/mihomo_yamls/refs/heads/ruleset/meta/domain/fake-ip-filter.mrs" \
+  "https://cdn.jsdelivr.net/gh/HenryChiao/mihomo_yamls@ruleset/meta/domain/fake-ip-filter.mrs" \
+  "https://gh-proxy.com/https://raw.githubusercontent.com/HenryChiao/mihomo_yamls/refs/heads/ruleset/meta/domain/fake-ip-filter.mrs"
 log "fake-ip-filter.mrs" "$(du -h "$OUT/fake-ip-filter.mrs" 2>/dev/null | cut -f1)"
 
 # --- 5. Result -----------------------------------------------------------------
