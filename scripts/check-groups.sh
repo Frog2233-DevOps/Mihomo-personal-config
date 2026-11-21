@@ -24,13 +24,28 @@ if [ -z "$SECRET" ] && [ -f /etc/openclash/secret ]; then
 fi
 
 TMP="/tmp/oc_groups.$$.json"
-trap 'rm -f "$TMP"' EXIT
+trap 'rm -f "$TMP" "$TMP.lines"' EXIT
 
-if [ -n "$SECRET" ]; then
-  curl -s -m 10 -H "Authorization: Bearer $SECRET" "http://$API/proxies" -o "$TMP"
+# OpenClash installs curl as a dependency, but a plain OpenWrt has only
+# uclient-fetch - use whatever is there.
+if command -v curl >/dev/null 2>&1; then
+  fetch() {
+    if [ -n "$SECRET" ]; then
+      curl -s -m 10 -H "Authorization: Bearer $SECRET" "http://$API/proxies" -o "$TMP"
+    else
+      curl -s -m 10 "http://$API/proxies" -o "$TMP"
+    fi
+  }
+elif command -v uclient-fetch >/dev/null 2>&1; then
+  fetch() {
+    uclient-fetch -q -T 10 -o "$TMP" "http://$API/proxies"
+  }
 else
-  curl -s -m 10 "http://$API/proxies" -o "$TMP"
+  echo "ERROR: neither curl nor uclient-fetch is available"
+  exit 1
 fi
+
+fetch
 
 if [ ! -s "$TMP" ]; then
   echo "ERROR: no answer from http://$API/proxies"
