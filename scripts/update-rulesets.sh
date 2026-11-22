@@ -4,19 +4,33 @@
 # =============================================================================
 #  Run it on the router (OpenWrt + OpenClash):
 #
-#      sh /etc/openclash/update-rulesets.sh
+#      sh /etc/openclash/scripts/update-rulesets.sh
 #
 #  It rebuilds the rule-sets with the core that is already on the router and
 #  installs the result. If anything goes wrong - no network, a list is not
 #  reachable - the old files stay in place and the script says so.
 #
-#  Put it into the cron of the router and the lists are fresh every day:
+#  Put it into the cron of the router and the lists are fresh every day
+#  (OpenWrt has no /etc/cron.d, use crontab - see docs/INSTALL.md):
 #
-#      30 5 * * * /etc/openclash/update-rulesets.sh >/tmp/update-rulesets.log 2>&1
+#      30 5 * * * /etc/openclash/scripts/update-rulesets.sh >/tmp/update-rulesets.log 2>&1
+#
+#  The layout on the router. build-ruleset.sh takes the folder above its own
+#  as the root of the repository and reads lists/custom-domains.list from
+#  there, so the two folders have to stay side by side:
+#
+#      /etc/openclash/scripts/build-ruleset.sh
+#      /etc/openclash/scripts/update-rulesets.sh
+#      /etc/openclash/lists/custom-domains.list
+#      /etc/openclash/ruleset/                      <- the result
+#
+#  Do not copy the scripts straight into /etc/openclash/ - the root would be
+#  /etc and the build would look for /etc/lists/custom-domains.list.
 #
 #  Environment variables:
 #      RULES_DIR   where the .mrs files live      (default: /etc/openclash/ruleset)
 #      SCRIPTS_DIR where build-ruleset.sh is      (default: the directory of this script)
+#      CUSTOM_LIST your own domains               (default: <SCRIPTS_DIR>/../lists/custom-domains.list)
 #      MIHOMO      the core to use                (default: the OpenClash core)
 #      RESTART     "1" to restart OpenClash       (default: 1)
 # =============================================================================
@@ -25,6 +39,11 @@ RULES_DIR="${RULES_DIR:-/etc/openclash/ruleset}"
 SCRIPTS_DIR="${SCRIPTS_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 RESTART="${RESTART:-1}"
 BUILD="$SCRIPTS_DIR/build-ruleset.sh"
+
+# The same root that build-ruleset.sh derives: the folder above scripts/.
+ROOT="$(cd "$SCRIPTS_DIR/.." && pwd)"
+CUSTOM_LIST="${CUSTOM_LIST:-$ROOT/lists/custom-domains.list}"
+export CUSTOM_LIST
 
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
 
@@ -49,7 +68,16 @@ fi
 log "core: $CORE"
 
 if [ ! -f "$BUILD" ]; then
-  log "ERROR: $BUILD not found - copy the scripts/ folder to the router"
+  log "ERROR: $BUILD not found - build-ruleset.sh has to lie next to this script"
+  exit 1
+fi
+
+# --- check the layout before building ----------------------------------------
+if [ ! -f "$CUSTOM_LIST" ]; then
+  log "ERROR: $CUSTOM_LIST not found"
+  log "       the scripts need the layout of the repository: scripts/ and lists/"
+  log "       side by side, e.g. /etc/openclash/scripts and /etc/openclash/lists"
+  log "       (or point CUSTOM_LIST at your own file)"
   exit 1
 fi
 
