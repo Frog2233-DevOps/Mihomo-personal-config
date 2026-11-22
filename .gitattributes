@@ -1,0 +1,21 @@
+# The scripts run on a Linux router, so the line endings matter: a file with
+# Windows line endings (CRLF) makes the shell parser fail with
+# "syntax error: unexpected word (expecting do)" and the shell of the router
+# cannot run it.
+#
+# These rules keep the line endings of the text files in the repository even
+# when it is checked out on Windows.
+* text=auto
+
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.conf text eol=lf
+*.list text eol=lf
+*.md   text eol=lf
+
+# PowerShell is happy with both, but CRLF is the native one.
+*.ps1  text eol=crlf
+
+# The compiled rule-sets are binary.
+*.mrs  binary

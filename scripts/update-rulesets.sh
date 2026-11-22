@@ -26,6 +26,7 @@ SCRIPTS_DIR="${SCRIPTS_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 RESTART="${RESTART:-1}"
 BUILD="$SCRIPTS_DIR/build-ruleset.sh"
 
+
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
 
 # --- find the core -----------------------------------------------------------

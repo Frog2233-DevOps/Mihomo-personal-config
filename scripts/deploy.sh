@@ -51,7 +51,9 @@ scp $SSH_OPTS "$ROOT"/ruleset/*.mrs "$ROUTER_USER@$ROUTER_HOST:$ROUTER_PATH/rule
 echo "--- scripts (for the automatic rule-set update on the router) ---"
 scp $SSH_OPTS "$ROOT"/scripts/build-ruleset.sh "$ROOT"/scripts/update-rulesets.sh \
     "$ROUTER_USER@$ROUTER_HOST:$ROUTER_PATH/"
-ssh $SSH_OPTS "$ROUTER_USER@$ROUTER_HOST" "chmod +x $ROUTER_PATH/build-ruleset.sh $ROUTER_PATH/update-rulesets.sh"
+# A checkout on Windows gives the scripts Windows line endings, and the
+# shell of the router cannot parse them. Fix it on the router.
+ssh $SSH_OPTS "$ROUTER_USER@$ROUTER_HOST" "sed -i 's/\\r$//' $ROUTER_PATH/*.sh; chmod +x $ROUTER_PATH/build-ruleset.sh $ROUTER_PATH/update-rulesets.sh"
 
 echo "--- openclash settings ---"
 scp $SSH_OPTS "$ROOT/RU-Mihomo.conf" "$ROUTER_USER@$ROUTER_HOST:$ROUTER_PATH/backup/RU-Mihomo.conf"

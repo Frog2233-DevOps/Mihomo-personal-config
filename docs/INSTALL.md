@@ -152,6 +152,24 @@ ssh root@192.168.1.1 'chmod +x /etc/openclash/*.sh'
 ssh root@192.168.1.1 '/etc/openclash/update-rulesets.sh'      # the first run
 ```
 
+If the scripts were uploaded from a Windows checkout they can carry Windows
+line endings, and the shell of the router cannot parse them:
+
+```
+/etc/openclash/update-rulesets.sh: line 35: syntax error: unexpected word (expecting "do")
+```
+
+That is not a missing bash - the scripts are plain POSIX `sh`. It is the
+line endings. One command fixes it:
+
+```sh
+sed -i 's/\r$//' /etc/openclash/*.sh
+```
+
+The repository has a `.gitattributes` that keeps the line endings of the
+scripts at LF even on a Windows checkout, and `scripts/deploy.sh` strips the
+stray CRs on the router after every upload.
+
 Then put it into the cron of the router:
 
 ```sh
@@ -219,6 +237,10 @@ DNS, `fake-ip-filter`, `hosts`, the sniffer and `authentication` on every
 start. That is why `RU-Mihomo.conf` switches off its own DNS handling
 (`ENABLE_CUSTOM_DNS = 0`, `CUSTOM_FAKEIP_FILTER = 0`,
 `CUSTOM_NAME_POLICY = 0`).
+
+**The scripts fail with `syntax error: unexpected word (expecting "do")`.**
+Windows line endings (CRLF) in the file. `sed -i 's/\r$//' /etc/openclash/*.sh`.
+The scripts are plain POSIX `sh`, no bash needed.
 
 **You want your own node filter.** Put it on the *groups*, not on the
 provider: OpenClash rewrites the provider filters from its own UI.
