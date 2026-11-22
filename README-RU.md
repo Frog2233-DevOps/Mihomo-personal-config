@@ -71,12 +71,12 @@ English version: [README.md](README.md).
 потому что этот конфиг их никогда не читает. Дашборд не качается, потому что
 ядро распаковывает zip без проверки целостности.
 
-Подробности и замеры: [docs/DESIGN.md](docs/DESIGN.md).
+Подробности и замеры: [docs/DESIGN-RU.md](docs/DESIGN-RU.md).
 
 ## Группы прокси
 
 18 групп, в именах эмодзи. Полное описание — в
-[docs/GROUPS.md](docs/GROUPS.md).
+[docs/GROUPS-RU.md](docs/GROUPS-RU.md).
 
 | Группа | Тип | Зачем |
 |---|---|---|
@@ -139,13 +139,15 @@ Lite-вариант существует потому, что список ре�
 | `scripts/make-lite.sh`, `scripts/make-smart.sh` | пересборка вариантов |
 | `scripts/deploy.sh` | копирует конфиг и ruleset'ы на роутер по SSH |
 | `scripts/check-groups.sh` | запуск на роутере: что попало в каждую группу |
-| `scripts/update-rulesets.sh` | запуск на роутере: пересобирает ruleset'ы своим же ядром и перезапускает OpenClash - списки обновляются сами |
+| `scripts/update-rulesets.sh` | запуск на роутере: пересобирает ruleset'ы своим же ядром, ставит их и применяет - списки обновляются сами |
+| `scripts/apply-rulesets.sh` | запуск на роутере: говорит работающему ядру перечитать конфиг (через API, без перезапуска) |
 | `scripts/fix-exec.sh`, `scripts/fix-exec.ps1` | mark the scripts as executable (bash and PowerShell) |
 | `scripts/selftest.sh` | `mihomo -t` каждого конфига + проверки фильтров, групп и файлов |
-| `docs/DESIGN.md` | почему принято каждое решение, с замерами |
-| `docs/INSTALL.md` | установка на OpenWrt / OpenClash |
-| `docs/GROUPS.md` | зачем нужна каждая группа |
-| `docs/RULESETS.md` | откуда списки и как они собираются |
+| `docs/DESIGN-RU.md` | почему принято каждое решение, с замерами |
+| `docs/INSTALL-RU.md` | установка на OpenWrt / OpenClash |
+| `docs/GROUPS-RU.md` | зачем нужна каждая группа |
+| `docs/RULESETS-RU.md` | откуда списки и как они собираются |
+| `docs/DESIGN.md`, `docs/INSTALL.md`, `docs/GROUPS.md`, `docs/RULESETS.md` | то же самое на английском |
 | `AGENTS.md` | правила, которые нельзя ломать — для ИИ-моделей и для людей |
 
 ## Цифры

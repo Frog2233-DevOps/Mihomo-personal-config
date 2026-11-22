@@ -1,5 +1,7 @@
 # Installation
 
+**English** | [Русский](INSTALL-RU.md)
+
 Target: OpenWrt 25.12.x on a router with a MediaTek MT798x SoC, OpenClash
 v0.48.002. Tested on a **Cudy WR3000S v1**.
 
@@ -164,6 +166,7 @@ repository:
 /etc/openclash/
   scripts/build-ruleset.sh
   scripts/update-rulesets.sh
+  scripts/apply-rulesets.sh
   lists/custom-domains.list
   ruleset/                      <- the result, the .mrs files
 ```
@@ -176,7 +179,7 @@ Install, from the root of the repository on your computer:
 
 ```sh
 ssh root@192.168.1.1 'mkdir -p /etc/openclash/scripts /etc/openclash/lists'
-scp -O scripts/build-ruleset.sh scripts/update-rulesets.sh root@192.168.1.1:/etc/openclash/scripts/
+scp -O scripts/build-ruleset.sh scripts/update-rulesets.sh scripts/apply-rulesets.sh root@192.168.1.1:/etc/openclash/scripts/
 scp -O lists/custom-domains.list root@192.168.1.1:/etc/openclash/lists/
 ssh root@192.168.1.1 'chmod +x /etc/openclash/scripts/*.sh'
 ```
@@ -189,8 +192,27 @@ ssh root@192.168.1.1 'ls /etc/openclash/ruleset/*.mrs | wc -l'     # 28
 ```
 
 The first run builds all the rule-sets, installs them into
-`/etc/openclash/ruleset/` and restarts OpenClash. Check the log of the run
+`/etc/openclash/ruleset/` and applies them. Check the log of the run
 (`/tmp/update-rulesets.log` when it is started from cron).
+
+**The last step is the apply.** The core reads the rule-sets when it loads
+the config, so somebody has to tell it to read them again. There are two ways,
+and `scripts/apply-rulesets.sh` does both:
+
+| `APPLY=` | What happens |
+|---|---|
+| `reload` (default) | The core is asked to reload its config through its own API (`PUT /configs?force=true`). The core process stays alive, the proxy is not interrupted, the new rule-sets work after a second. |
+| `restart` | OpenClash is restarted. Simple, but the proxy is down for half a minute. |
+| `none` | Nothing. The new lists are used after the next restart. |
+| `check` | Only looks: how many rule-providers the running core has and how many rules they hold. |
+
+If the reload does not work, the script restarts OpenClash by itself - the
+new lists are always applied, one way or another. To see what the core has
+right now:
+
+```sh
+ssh root@192.168.1.1 'APPLY=check sh /etc/openclash/scripts/apply-rulesets.sh'
+```
 
 **Files from Windows.** The `.gitattributes` of the repository keeps the
 scripts in LF. If you copied them from an older checkout and the router
@@ -219,7 +241,7 @@ ssh root@192.168.1.1 'crontab -l'                                   # the line i
 ```
 
 Every morning the router rebuilds the lists with its own core, installs them
-and restarts OpenClash. If the build fails - no network, a list unreachable -
+and applies them. If the build fails - no network, a list unreachable -
 **the old lists stay in place** and the log says so. Nothing breaks.
 
 The script tries the direct link first and then the mirrors
@@ -232,7 +254,17 @@ The script tries the direct link first and then the mirrors
 them to the repository. To push them to the router as well, add the
 repository secrets `ROUTER_HOST`, `ROUTER_USER`, `ROUTER_PORT`,
 `ROUTER_PATH` and `SSH_PRIVATE_KEY` - the workflow then calls
-`scripts/deploy.sh`.
+`scripts/deploy.sh`, which copies the files, applies them and prints what the
+router has now.
+
+The workflow needs a runner that can reach the router: a GitHub-hosted runner
+is somewhere in the internet and does not see your LAN. Use a self-hosted
+runner on your own machine, or a runner behind a VPN.
+
+**Both ways at once?** Pick one. The router cron works without any secret and
+survives a dead workflow; the Actions path works even when the router is
+off at night. If both are on, the router cron wins - it runs at 5:30 and the
+workflow commits once a day.
 
 ### 5.3 On your computer
 

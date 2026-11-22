@@ -1,5 +1,7 @@
 # Proxy groups
 
+**English** | [Русский](GROUPS-RU.md)
+
 18 groups. The emoji is part of the name - the names are the same in the
 config, in the rules and in the dashboard.
 

@@ -1,5 +1,7 @@
 # Rule-sets
 
+**English** | [Русский](RULESETS-RU.md)
+
 28 files in `ruleset/`, 1.5 MB in total. They are compiled from the lists
 below by `scripts/build-ruleset.sh`.
 

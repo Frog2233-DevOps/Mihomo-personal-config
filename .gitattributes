@@ -8,5 +8,8 @@
 *.yml   text eol=lf
 *.md    text eol=lf
 
+# PowerShell is the one script that runs on Windows only - CRLF is its habit.
+*.ps1   text eol=crlf
+
 # Compiled rule-sets are binary.
 *.mrs   binary

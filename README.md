@@ -71,12 +71,13 @@ LAN could drive the proxy. The geo databases (16.5 + 4.4 MB) are switched off
 because this config never reads them. The dashboard zip is not downloaded
 because the core unpacks it without any integrity check.
 
-Details and measurements: [docs/DESIGN.md](docs/DESIGN.md).
+Details and measurements: [docs/DESIGN.md](docs/DESIGN.md), in Russian:
+[docs/DESIGN-RU.md](docs/DESIGN-RU.md).
 
 ## The proxy groups
 
 18 groups, emoji in the names. Full description in
-[docs/GROUPS.md](docs/GROUPS.md).
+[docs/GROUPS.md](docs/GROUPS.md) / [docs/GROUPS-RU.md](docs/GROUPS-RU.md).
 
 | Group | Type | What it is for |
 |---|---|---|
@@ -139,13 +140,15 @@ otherwise they keep the old URL.
 | `scripts/make-lite.sh`, `scripts/make-smart.sh` | regenerate the variants |
 | `scripts/deploy.sh` | copies the config and the rule-sets to the router over SSH |
 | `scripts/check-groups.sh` | runs on the router: what ended up in every group |
-| `scripts/update-rulesets.sh` | runs on the router: rebuilds the rule-sets with its own core and restarts OpenClash - the lists update themselves |
+| `scripts/update-rulesets.sh` | runs on the router: rebuilds the rule-sets with its own core, installs them and applies them - the lists update themselves |
+| `scripts/apply-rulesets.sh` | runs on the router: tells the running core to reload its config through its own API, without a restart |
 | `scripts/fix-exec.sh`, `scripts/fix-exec.ps1` | mark the scripts as executable (bash and PowerShell) |
 | `scripts/selftest.sh` | `mihomo -t` on every config + the checks on the filters, the groups and the files |
 | `docs/DESIGN.md` | why every decision was made, with the measurements |
 | `docs/INSTALL.md` | installation on OpenWrt / OpenClash |
 | `docs/GROUPS.md` | what every group is for |
 | `docs/RULESETS.md` | where the lists come from and how they are built |
+| `docs/*-RU.md` | the same four documents in Russian |
 | `AGENTS.md` | the rules that must not be broken, for AI models and for humans |
 
 ## Numbers

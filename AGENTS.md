@@ -104,6 +104,8 @@ are still reachable through `🎯 Manual`.
 
 * `README.md` and `README-RU.md` describe the same thing in two
   languages. Keep them in sync when you change the installation steps.
+* The documents come in pairs: `docs/DESIGN.md` and `docs/DESIGN-RU.md`,
+  and the same for `INSTALL`, `GROUPS` and `RULESETS`. Change both.
 * The file is UTF-8, but everything except the emoji in the group names is
   ASCII. The Russian words in the regexes are written as `\x{...}`.
 * The group names carry an emoji and are quoted: `- name: "🚀 Auto"`.
@@ -136,6 +138,29 @@ repository, install it on the router in the same relative place and say so in
 
 OpenWrt has no `/etc/cron.d`: the cron job goes into the crontab of root
 (`docs/INSTALL.md`, section 5.1).
+
+## Applying the rule-sets
+
+The core reads the rule-sets when it loads the config, so a new list is not in
+use until the core is told to read it again. `scripts/apply-rulesets.sh` does
+that, and it has four modes:
+
+| `APPLY=` | What happens |
+|---|---|
+| `reload` (default) | `PUT /configs?force=true` on the running core: it reloads its config and reads the new files, the proxy stays up. Measured: the rule count of a provider changes without a restart. |
+| `restart` | `/etc/init.d/openclash restart`. The fallback when the reload fails. |
+| `none` | Nothing. The lists are used after the next restart. |
+| `check` | Only looks: how many rule-providers the core has and how many rules. |
+
+The secret and the API address are read out of the config the core runs with
+(`/etc/openclash/<name>.yaml`), because that is where OpenClash writes them
+(`yml_change.sh`). Keep `apply-rulesets.sh` POSIX `sh`: it runs on the router,
+where only busybox ash exists.
+
+`scripts/deploy.sh` copies the scripts into `scripts/` on the router (not
+flat into `/etc/openclash/`), strips the carriage returns and applies the
+result. It uses `scp -O` when the local scp knows the flag: OpenSSH 9 copies
+over SFTP by default and the dropbear of OpenWrt has no `sftp-server`.
 
 ## Adding a new service group
 
