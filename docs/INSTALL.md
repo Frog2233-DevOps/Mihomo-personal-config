@@ -1,10 +1,19 @@
 # Installation
 
+**English** | [Русский](INSTALL-RU.md)
+
 Target: OpenWrt 25.12.x on a router with a MediaTek MT798x SoC, OpenClash
 v0.48.002. Tested on a **Cudy WR3000S v1**.
 
 Everything below was checked against the sources of OpenClash v0.48.002 and
 against a running router.
+
+The commands use `192.168.1.1`, the default address of OpenWrt. Put your own
+address (or an alias from `~/.ssh/config`) there.
+
+**About `scp -O`.** OpenSSH 9 and newer copies over SFTP by default, and
+the stock dropbear of OpenWrt has no `sftp-server`. Every `scp` below has `-O`
+(the classic SCP protocol) for that reason.
 
 ---
 
@@ -54,20 +63,18 @@ The first start generates a random dashboard password and an
 From your computer:
 
 ```sh
-scp RU-Mihomo.yaml root@192.168.1.1:/etc/openclash/config/
-scp RU-Mihomo.conf root@192.168.1.1:/etc/openclash/
-scp ruleset/*.mrs root@192.168.1.1:/etc/openclash/ruleset/
-```
-
-The `ruleset/` folder has to exist:
-
-```sh
-ssh root@192.168.1.1 'mkdir -p /etc/openclash/ruleset /etc/openclash/backup'
+ssh root@192.168.1.1 'mkdir -p /etc/openclash/config /etc/openclash/ruleset /etc/openclash/backup'
+scp -O RU-Mihomo.yaml root@192.168.1.1:/etc/openclash/config/
+scp -O RU-Mihomo.conf root@192.168.1.1:/etc/openclash/
+scp -O ruleset/*.mrs root@192.168.1.1:/etc/openclash/ruleset/
 ```
 
 The rule-set paths in the config are relative (`./ruleset/...`), so they are
 resolved against the working directory of the core, which is `/etc/openclash`
 on the router.
+
+The `.mrs` files copied here are the ones from the repository. Section 5
+makes the router build fresh ones itself.
 
 ---
 
@@ -101,6 +108,10 @@ the line at the end of `RU-Mihomo.conf`:
 ruby_map_edit "$CONFIG_FILE" "['proxy-providers']" "Main" "['url']" "PASTE_SUBSCRIPTION_URL_HERE"
 ```
 
+The repository is public. Do not commit the subscription URL or the password:
+edit the copy on the router, or keep a private copy of `RU-Mihomo.conf` outside
+the repository.
+
 ---
 
 ## 4. Start and check
@@ -113,7 +124,7 @@ Wait for the log to say the core is ready, then check what ended up in the
 groups:
 
 ```sh
-scp scripts/check-groups.sh root@192.168.1.1:/etc/openclash/
+scp -O scripts/check-groups.sh root@192.168.1.1:/etc/openclash/
 ssh root@192.168.1.1 'sh /etc/openclash/check-groups.sh'
 ```
 
@@ -144,22 +155,93 @@ refresh them - and that somebody does not have to be you.
 ### 5.1 On the router (recommended, no secrets)
 
 The router already has the core that does the conversion. Copy the scripts
-over and let the router refresh the lists itself:
+over and let the router refresh the lists itself.
 
-```sh
-scp scripts/build-ruleset.sh scripts/update-rulesets.sh root@192.168.1.1:/etc/openclash/
-ssh root@192.168.1.1 'chmod +x /etc/openclash/*.sh'
-ssh root@192.168.1.1 '/etc/openclash/update-rulesets.sh'      # the first run
+**The layout matters.** `build-ruleset.sh` takes the folder above its own as
+the root of the repository and reads `lists/custom-domains.list` from there.
+So `scripts/` and `lists/` have to lie side by side, the same as in the
+repository:
+
+```text
+/etc/openclash/
+  scripts/build-ruleset.sh
+  scripts/update-rulesets.sh
+  scripts/apply-rulesets.sh
+  lists/custom-domains.list
+  ruleset/                      <- the result, the .mrs files
 ```
 
-Then put it into the cron of the router:
+Do **not** copy the two scripts straight into `/etc/openclash/`: the root
+becomes `/etc` and the build stops with
+`ERROR: /etc/lists/custom-domains.list not found`.
+
+Install, from the root of the repository on your computer:
 
 ```sh
-ssh root@192.168.1.1 "echo '30 5 * * * /etc/openclash/update-rulesets.sh >/tmp/update-rulesets.log 2>&1' > /etc/cron.d/openclash-ruleset"
+ssh root@192.168.1.1 'mkdir -p /etc/openclash/scripts /etc/openclash/lists'
+scp -O scripts/build-ruleset.sh scripts/update-rulesets.sh scripts/apply-rulesets.sh root@192.168.1.1:/etc/openclash/scripts/
+scp -O lists/custom-domains.list root@192.168.1.1:/etc/openclash/lists/
+ssh root@192.168.1.1 'chmod +x /etc/openclash/scripts/*.sh'
+```
+
+Run it once by hand and look at the result:
+
+```sh
+ssh root@192.168.1.1 '/etc/openclash/scripts/update-rulesets.sh; echo exit=$?'
+ssh root@192.168.1.1 'ls /etc/openclash/ruleset/*.mrs | wc -l'     # 28
+```
+
+The first run builds all the rule-sets, installs them into
+`/etc/openclash/ruleset/` and applies them. Check the log of the run
+(`/tmp/update-rulesets.log` when it is started from cron).
+
+**The last step is the apply.** The core reads the rule-sets when it loads
+the config, so somebody has to tell it to read them again. There are two ways,
+and `scripts/apply-rulesets.sh` does both:
+
+| `APPLY=` | What happens |
+|---|---|
+| `reload` (default) | The core is asked to reload its config through its own API (`PUT /configs?force=true`). The core process stays alive, the proxy is not interrupted, the new rule-sets work after a second. |
+| `restart` | OpenClash is restarted. Simple, but the proxy is down for half a minute. |
+| `none` | Nothing. The new lists are used after the next restart. |
+| `check` | Only looks: how many rule-providers the running core has and how many rules they hold. |
+
+If the reload does not work, the script restarts OpenClash by itself - the
+new lists are always applied, one way or another. To see what the core has
+right now:
+
+```sh
+ssh root@192.168.1.1 'APPLY=check sh /etc/openclash/scripts/apply-rulesets.sh'
+```
+
+**Files from Windows.** The `.gitattributes` of the repository keeps the
+scripts in LF. If you copied them from an older checkout and the router
+answers `not found` or `sh\r`, strip the carriage returns:
+
+```sh
+ssh root@192.168.1.1 "sed -i 's/\r$//' /etc/openclash/scripts/*.sh /etc/openclash/lists/custom-domains.list"
+```
+
+**Switching from an older config.** The rule-sets that the new config no longer
+uses stay on the flash. Do not delete anything **before** the first successful
+run: while the build fails, the old files are what OpenClash is working with,
+and an empty `ruleset/` stops it from starting. After the run succeeded,
+`ls -lt /etc/openclash/ruleset/` shows the new files on top; delete the old
+ones below them (or all of them and run the script again).
+
+#### The cron
+
+OpenWrt has no `/etc/cron.d`; the cron of the router is the crontab of root, and
+OpenClash keeps its own tasks in the same crontab. Add the line, do not
+overwrite the file:
+
+```sh
+ssh root@192.168.1.1 "(crontab -l 2>/dev/null | grep -v update-rulesets; echo '30 5 * * * /etc/openclash/scripts/update-rulesets.sh >/tmp/update-rulesets.log 2>&1') | crontab - && /etc/init.d/cron enable && /etc/init.d/cron restart"
+ssh root@192.168.1.1 'crontab -l'                                   # the line is there
 ```
 
 Every morning the router rebuilds the lists with its own core, installs them
-and restarts OpenClash. If the build fails - no network, a list unreachable -
+and applies them. If the build fails - no network, a list unreachable -
 **the old lists stay in place** and the log says so. Nothing breaks.
 
 The script tries the direct link first and then the mirrors
@@ -172,7 +254,17 @@ The script tries the direct link first and then the mirrors
 them to the repository. To push them to the router as well, add the
 repository secrets `ROUTER_HOST`, `ROUTER_USER`, `ROUTER_PORT`,
 `ROUTER_PATH` and `SSH_PRIVATE_KEY` - the workflow then calls
-`scripts/deploy.sh`.
+`scripts/deploy.sh`, which copies the files, applies them and prints what the
+router has now.
+
+The workflow needs a runner that can reach the router: a GitHub-hosted runner
+is somewhere in the internet and does not see your LAN. Use a self-hosted
+runner on your own machine, or a runner behind a VPN.
+
+**Both ways at once?** Pick one. The router cron works without any secret and
+survives a dead workflow; the Actions path works even when the router is
+off at night. If both are on, the router cron wins - it runs at 5:30 and the
+workflow commits once a day.
 
 ### 5.3 On your computer
 
@@ -209,6 +301,19 @@ subscription unreachable.
 **A rule-set does not match.** `mihomo -t` does not check whether the files
 exist. Look for "rule set ... not found" in the log, and run
 `./scripts/selftest.sh`.
+
+**`ERROR: .../lists/custom-domains.list not found`.** The scripts lie in the
+wrong place. `scripts/` and `lists/` must be side by side (section 5.1), for
+example `/etc/openclash/scripts` and `/etc/openclash/lists`.
+
+**`scp` fails with `sftp-server: not found` or `subsystem request failed`.**
+Add `-O`: dropbear has no SFTP server.
+
+**`can't create /etc/cron.d/...: nonexistent directory`.** There is no
+`/etc/cron.d` on OpenWrt. Use the crontab, see section 5.1.
+
+**The script says `not found` or `sh\r` although the file is there.** It has
+Windows line endings. Strip them with the `sed` command from section 5.1.
 
 **The dashboard asks for a password you do not know.** It is
 `DASHBOARD_PASSWORD` from `RU-Mihomo.conf` (or the random one that OpenClash

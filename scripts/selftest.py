@@ -193,6 +193,21 @@ if "type: smart" not in smart:
 else:
     print("  OK   the smart variant has a smart group")
 
+# --- 7. no bare YAML 1.1 booleans where a string is meant ---------------------
+# OpenClash rewrites the config with ruby (Psych) at every start, and Psych
+# reads a bare "off" / "on" / "yes" / "no" as a boolean. A value like
+# find-process-mode: off would become false and the core would refuse to
+# start. Every such value has to be quoted.
+BARE_BOOL = re.compile(r"^\s*[A-Za-z0-9_-]+:\s+(on|off|yes|no|y|n|true|false)\s*(#.*)?$")
+for name in ("RU-Mihomo.yaml", "RU-Mihomo-lite.yaml", "RU-Mihomo-smart.yaml"):
+    for i, line in enumerate(read(name).split("\n"), 1):
+        m = BARE_BOOL.match(line)
+        if m and m.group(1) in ("on", "off", "yes", "no", "y", "n"):
+            fail.append("%s:%d: bare '%s' - quote it, ruby reads it as a boolean"
+                        % (name, i, m.group(1)))
+if not any("bare '" in f for f in fail):
+    print("  OK   no bare YAML 1.1 booleans (ruby would turn them into false)")
+
 print()
 if fail:
     print("FAILED:")

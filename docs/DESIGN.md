@@ -1,5 +1,7 @@
 # Design notes
 
+**English** | [Русский](DESIGN-RU.md)
+
 Every statement in this file was measured, not read from a README. Where a
 number is given, this is how it was obtained.
 
@@ -214,6 +216,22 @@ implementation, so lookaheads do work if you ever need one.
 `scripts/selftest.sh` checks that the noise part of `foreign-filter` is
 still identical to `noise-filter` - otherwise an LTE node could slip into an
 automatic group.
+
+### The probe URL
+
+Every automatic group measures its nodes against
+`https://cp.cloudflare.com/generate_204`. HTTPS, not HTTP: the probe travels
+through the node that is being measured, and a plain HTTP answer can be forged
+by anything on the way. The TLS handshake is part of the measurement, that is
+the point. The URL is one YAML anchor (`&probe-url`), so all the groups and the
+health check of the provider use the same one.
+
+### `find-process-mode`
+
+`off`. On a router the traffic of the clients is forwarded - there is no local
+process to look for, and this config has no `PROCESS-NAME` rules. The lookup
+would only cost CPU. (The default of mihomo is `strict`, which looks up the
+process for traffic that comes from the device itself.)
 
 ---
 
