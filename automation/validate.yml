@@ -46,3 +46,6 @@ jobs:
 
       - name: Selftest
         run: bash ./scripts/selftest.sh
+        env:
+          MIHOMO: ./mihomo
+          MIHOMO_SMART: ./mihomo-smart

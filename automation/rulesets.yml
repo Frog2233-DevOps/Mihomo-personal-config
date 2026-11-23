@@ -31,6 +31,8 @@ jobs:
 
       - name: Selftest
         run: bash ./scripts/selftest.sh
+        env:
+          MIHOMO: ./mihomo
 
       - name: Commit the new rule-sets
         # the guard stops the loop: the commit of this step triggers the

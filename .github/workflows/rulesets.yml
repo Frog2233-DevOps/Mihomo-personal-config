@@ -43,6 +43,8 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # the files that came through the API have no executable bit - set it
+          # once here, the commit below carries the mode into the repository
           chmod +x scripts/*.sh scripts/*.py
           git add ruleset scripts
           if git diff --staged --quiet; then
@@ -78,4 +80,4 @@ jobs:
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           export SSH_KEY=~/.ssh/deploy_key
-          ./scripts/deploy.sh
+          bash ./scripts/deploy.sh

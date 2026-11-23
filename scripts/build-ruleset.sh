@@ -109,8 +109,11 @@ normalize() { # normalize <in> <out>
       # already prefixed entries stay as they are
       if (line ~ /^\+\./) { print line; next }
       if (line ~ /^\*\./) { print "+." substr(line, 3); next }
-      # drop junk lines
-      if (line !~ /^[A-Za-z0-9_.]+$/) { next }
+      # Drop non-domain lines (adblock syntax, URLs, spaces, ...).
+      # A hyphen is a legal character in a hostname label (and in punycode,
+      # e.g. xn--...), so it must stay in the class: dropping it silently
+      # removes domains such as "01-klinika-21.ru" from the RKN list.
+      if (line !~ /^[A-Za-z0-9_.-]+$/) { next }
       # IP-like strings do not belong in a domain file
       if (line ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/) { next }
       print "+." line

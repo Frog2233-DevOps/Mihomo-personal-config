@@ -7,6 +7,7 @@
 #
 #  Bare domains are enough: the build script adds the "+." prefix
 #  (DOMAIN-SUFFIX), so "example.com" also covers "www.example.com".
+#  Hyphens are fine too: "my-site.ru" is a valid entry.
 #
 #  Lines starting with "#" and empty lines are ignored.
 #
