@@ -518,8 +518,9 @@ proxy-groups:
 # Order matters: from specific to general. Every statement here was measured,
 # see docs/DESIGN.md.
 rules:
-  # 1. LAN and services that must not be proxied.
-  - RULE-SET,private,DIRECT
+  # 1. LAN and services that must not be proxied. no-resolve: a domain must
+  #    not be resolved just to find out that it is not a private address.
+  - RULE-SET,private,DIRECT,no-resolve
   - RULE-SET,fake-ip-filter,DIRECT
 
   # 2. Your own domains - the highest priority after the LAN, above the ad
