@@ -33,7 +33,8 @@ variants.
 (`instagram.com`), and in mihomo a bare domain with `behavior: domain` matches
 **only that exact domain** - `www.instagram.com` slips through. Measured: with
 a bare list 0 of 12 subdomains matched, with the `+.` prefix 12 of 12. The
-build script adds the prefix before converting to `.mrs`.
+build script adds the prefix before converting to `.mrs`; hyphens stay in the
+domain characters, so entries like `01-klinika-21.ru` are not lost.
 
 **The rule order is derived from the overlaps, not from taste.**
 

@@ -74,6 +74,10 @@ These are not style preferences, each of them has a reason that was measured.
     overwrite the design of this config.
 11. **Plain aliases only, no `<<:` merge keys.** Both work, but a plain
     alias is also readable for tools that do not implement merge keys.
+12. **The domain normalizer must accept hyphens.** `scripts/build-ruleset.sh`
+    uses `^[A-Za-z0-9_.-]+$` for a bare domain. Removing `-` silently drops
+    valid entries (`01-klinika-21.ru`, `xn--...`): measured 20 833 of 82 146
+    lines lost from the RKN list on 2026-11-23.
 
 ## The DNS scheme
 

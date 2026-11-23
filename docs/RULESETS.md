@@ -19,7 +19,10 @@ The first three and the ad list are **not** used as they are: every bare
 domain gets the `+.` prefix (DOMAIN-SUFFIX) before the conversion, otherwise
 only the exact domain would match and `www.instagram.com` would slip
 through. Measured: with a bare list 0 of 12 subdomains matched, with the
-prefix 12 of 12.
+prefix 12 of 12. A hyphen is a valid hostname character, so domains like
+`01-klinika-21.ru` and punycode (`xn--...`) are kept as well - a narrower
+character class silently drops them (20 833 lines of the 82 146-line RKN
+list as of 2026-11-23).
 
 The ad list is the branch `master`, not `main`.
 
