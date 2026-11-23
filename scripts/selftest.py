@@ -150,7 +150,11 @@ else:
 # --- 2. the groups used in the rules exist -----------------------------------
 targets = set()
 for rule in cfg["rules"]:
-    targets.add(rule.split(",")[-1].strip())
+    # TYPE,payload,TARGET[,no-resolve]: the option is not the target
+    parts = [x.strip() for x in rule.split(",")]
+    while len(parts) > 1 and parts[-1] == "no-resolve":
+        parts.pop()
+    targets.add(parts[-1])
 missing = sorted(t for t in targets if t not in names and t not in BUILTIN)
 if missing:
     fail.append("groups used in the rules but not defined: %s" % ", ".join(missing))
