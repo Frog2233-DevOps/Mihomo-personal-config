@@ -144,11 +144,13 @@ Lite-вариант существует потому, что список ре�
 | `scripts/apply-rulesets.sh` | запуск на роутере: говорит работающему ядру перечитать конфиг (через API, без перезапуска) |
 | `scripts/fix-exec.sh`, `scripts/fix-exec.ps1` | mark the scripts as executable (bash and PowerShell) |
 | `scripts/selftest.sh` | `mihomo -t` каждого конфига + проверки фильтров, групп и файлов |
+| `tests/run-all.sh` | полный набор регрессионных тестов (конфиги, нормализатор, скрипты, доки, воркфлоу); `tests/04_cycle.sh` проверяет цикл доставки на реальном роутере |
 | `docs/DESIGN-RU.md` | почему принято каждое решение, с замерами |
 | `docs/INSTALL-RU.md` | установка на OpenWrt / OpenClash |
 | `docs/GROUPS-RU.md` | зачем нужна каждая группа |
 | `docs/RULESETS-RU.md` | откуда списки и как они собираются |
-| `docs/DESIGN.md`, `docs/INSTALL.md`, `docs/GROUPS.md`, `docs/RULESETS.md` | то же самое на английском |
+| `docs/TEST-REPORT-RU.md` | отчёт о тестировании |
+| `docs/DESIGN.md`, `docs/INSTALL.md`, `docs/GROUPS.md`, `docs/RULESETS.md`, `docs/TEST-REPORT.md` | то же самое на английском |
 | `AGENTS.md` | правила, которые нельзя ломать — для ИИ-моделей и для людей |
 
 ## Цифры
@@ -183,6 +185,14 @@ bash scripts/fix-exec.sh          # Git Bash, Linux, macOS
 ```sh
 bash scripts/build-ruleset.sh
 bash scripts/selftest.sh
+bash tests/run-all.sh
+```
+
+Последнюю команду запускает и CI на каждом PR. С роутером (или с QEMU-эмулятором
+WR3000S) можно проверить весь цикл доставки:
+
+```sh
+ROUTER_HOST=192.168.1.1 ROUTER_PORT=22 SECRET=<пароль> bash tests/04_cycle.sh
 ```
 
 ## Откуда берутся списки

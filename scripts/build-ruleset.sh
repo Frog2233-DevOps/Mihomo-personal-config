@@ -212,7 +212,9 @@ log "fake-ip-filter.mrs" "$(du -h "$OUT/fake-ip-filter.mrs" 2>/dev/null | cut -f
 step "5. Result"
 total=0
 for f in "$OUT"/*.mrs; do
-  sz=$(stat -c%s "$f" 2>/dev/null || echo 0)
+  # The GNU-only stat size format prints 0 for every file under busybox.
+  # wc -c is POSIX and works in both places.
+  sz=$(wc -c < "$f" 2>/dev/null || echo 0)
   total=$((total + sz))
 done
 printf '  Files: %s, total: %s\n' "$(ls -1 "$OUT"/*.mrs 2>/dev/null | wc -l)" "$(du -sh "$OUT" | cut -f1)"

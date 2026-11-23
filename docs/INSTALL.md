@@ -307,7 +307,20 @@ wrong place. `scripts/` and `lists/` must be side by side (section 5.1), for
 example `/etc/openclash/scripts` and `/etc/openclash/lists`.
 
 **`scp` fails with `sftp-server: not found` or `subsystem request failed`.**
-Add `-O`: dropbear has no SFTP server.
+`deploy.sh` already tries `-O` first and falls back automatically. If you
+call `scp` yourself, add `-O`: dropbear has no SFTP server.
+
+**`scp: stat local "8022": No such file or directory`.** A non-default SSH
+port was passed with `-p`. For `scp` the flag is capital `-P`; `deploy.sh`
+uses both forms (`-p` for `ssh`, `-P` for `scp`).
+
+**`check-groups.sh` prints `NOT FOUND` for every group and then "OK".** The
+API returned 401, not the proxy list: the dashboard password is missing or
+wrong. Pass `SECRET=<password>` or check `/etc/openclash/secret`. The script
+now rejects such an answer instead of reporting false positives.
+
+**The build summary says `Bytes: 0`.** It used GNU `stat -c%s`, which busybox
+does not support. The script now counts with `wc -c`.
 
 **`can't create /etc/cron.d/...: nonexistent directory`.** There is no
 `/etc/cron.d` on OpenWrt. Use the crontab, see section 5.1.
@@ -327,3 +340,31 @@ start. That is why `RU-Mihomo.conf` switches off its own DNS handling
 
 **You want your own node filter.** Put it on the *groups*, not on the
 provider: OpenClash rewrites the provider filters from its own UI.
+
+## 8. Verification
+
+Before opening a pull request, from the repository root:
+
+```sh
+./scripts/selftest.sh          # mihomo -t on all three configs + consistency
+bash tests/run-all.sh          # regression suite (also run by CI on every PR)
+```
+
+`tests/run-all.sh` covers the configs, the domain normalizer (including
+hyphenated and punycode domains), the deploy flags, the busybox build, the
+API checks, the EN/RU documentation pairs and the workflow copies. A router
+is not required for it.
+
+To check the **full cycle** — build, deploy, apply, check — against a real
+router or the Cudy WR3000S QEMU emulator (from 4pda topic 1087457, post
+#10376):
+
+```sh
+ROUTER_HOST=192.168.1.1 ROUTER_PORT=22 SECRET=<dashboard-password> \
+  bash tests/04_cycle.sh
+```
+
+It deploys with a non-default port, verifies the router layout and all 28
+rule-sets, asks the running core for its rule providers and checks that a
+wrong dashboard password is rejected. See `docs/DESIGN.md` section 9 for
+what the emulator can and cannot reproduce.

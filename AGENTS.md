@@ -30,11 +30,24 @@ Never edit the generated files by hand - the next generation overwrites it.
 
 ```sh
 ./scripts/selftest.sh
+bash tests/run-all.sh
 ```
 
-It runs `mihomo -t` on all three configs and checks the filters, the groups,
-the rule targets and the rule-set files. A pull request that does not pass
-it will not be merged.
+`selftest.sh` runs `mihomo -t` on all three configs and checks the filters,
+the groups, the rule targets and the rule-set files. `tests/run-all.sh` adds
+regression tests for the normalizer, the deploy flags, the busybox build,
+the API checks, the docs and the workflows. A pull request that does not
+pass both will not be merged.
+
+With a real router (or the WR3000S QEMU emulator from 4pda topic 1087457,
+post #10376) the full cycle can be checked as well:
+
+```sh
+ROUTER_HOST=192.168.1.1 ROUTER_PORT=22 SECRET=<dashboard-password> \
+  bash tests/04_cycle.sh
+```
+
+CI runs `tests/run-all.sh` on every pull request.
 
 ## Rules that must not be broken
 
@@ -78,6 +91,16 @@ These are not style preferences, each of them has a reason that was measured.
     uses `^[A-Za-z0-9_.-]+$` for a bare domain. Removing `-` silently drops
     valid entries (`01-klinika-21.ru`, `xn--...`): measured 20 833 of 82 146
     lines lost from the RKN list on 2026-11-23.
+13. **`deploy.sh` must use `-P` for scp and `-p` for ssh.** scp reads `-p` as
+    "preserve times", so a custom `ROUTER_PORT` used to be treated as a local
+    filename. The legacy `-O` flag is tried first because dropbear has no
+    SFTP server; do not remove the fallback.
+14. **Count bytes with `wc -c`, never GNU `stat -c%s`.** The router's busybox
+    `stat` prints 0 for every file, so the build summary lied about its size.
+15. **`check-groups.sh` must validate the API answer.** A 401 body is not an
+    empty answer: without a `"proxies"` check every group was printed as
+    `NOT FOUND` and the warnings reported a false `OK`. The `uclient-fetch`
+    fallback must pass `--header="Authorization: Bearer ..."`.
 
 ## The DNS scheme
 
