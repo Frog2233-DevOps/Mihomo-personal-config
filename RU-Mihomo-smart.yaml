@@ -39,8 +39,16 @@ tcp-concurrent: true
 keep-alive-interval: 30
 keep-alive-idle: 600
 
-# On a router, finding processes is expensive and pointless.
-find-process-mode: strict
+# On a router, finding processes is expensive and pointless: the traffic of
+# the clients is forwarded, there is no local process to find, and there are
+# no PROCESS-NAME rules in this config. "off" saves the lookup.
+#
+# The quotes are not decoration. YAML 1.1 reads a bare "off" as the boolean
+# false - and OpenClash rewrites this file with ruby (Psych) at every start.
+# Unquoted, the value would become "false" and the core would refuse to
+# start with "invalid find process mode". Measured: ruby round-trip of the
+# config turns the bare value into false, the quoted one survives.
+find-process-mode: 'off'
 
 # Remember the group selection and the fake-ip map across restarts.
 profile:
@@ -190,7 +198,10 @@ experimental:
 # =============================================================================
 x-fragments:
   # The probe URL for every automatic group.
-  probe-url: &probe-url 'http://cp.cloudflare.com/generate_204'
+  # HTTPS, not HTTP: the probe travels through the node that is being
+  # measured, and a plain HTTP answer can be forged by anything on the way.
+  # The TLS handshake is part of the measurement - that is the point.
+  probe-url: &probe-url 'https://cp.cloudflare.com/generate_204'
   probe-interval: &probe-interval 300
   probe-tolerance: &probe-tolerance 50
 
@@ -229,7 +240,7 @@ proxy-providers:
     proxy: DIRECT
     health-check:
       enable: true
-      url: 'http://cp.cloudflare.com/generate_204'
+      url: 'https://cp.cloudflare.com/generate_204'
       interval: 300
       timeout: 3000
       lazy: true

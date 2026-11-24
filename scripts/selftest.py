@@ -10,6 +10,10 @@ Checks:
   4. every provider used by a group exists
   5. every rule-set file exists in ruleset/
   6. the generated variants are really the generated variants
+  7. no bare YAML 1.1 booleans where a string is meant (ruby/Psych would
+     turn "off" into false and the core would refuse to start)
+  8. automation/*.yml matches .github/workflows/*.yml (fix-exec.sh copies
+     the former over the latter, so a drift silently reverts CI fixes)
 """
 import os
 import re
@@ -192,6 +196,49 @@ if "type: smart" not in smart:
     fail.append("RU-Mihomo-smart.yaml has no smart group")
 else:
     print("  OK   the smart variant has a smart group")
+
+# --- 7. no bare YAML 1.1 booleans where a string is meant ---------------------
+# OpenClash rewrites the config with ruby (Psych) at every start, and Psych
+# reads a bare "off" / "on" / "yes" / "no" as a boolean. A value like
+# find-process-mode: off would become false and the core would refuse to
+# start. Every such value has to be quoted.
+BARE_BOOL = re.compile(r"^\s*[A-Za-z0-9_-]+:\s+(on|off|yes|no|y|n|true|false)\s*(#.*)?$")
+for name in ("RU-Mihomo.yaml", "RU-Mihomo-lite.yaml", "RU-Mihomo-smart.yaml"):
+    for i, line in enumerate(read(name).split("\n"), 1):
+        m = BARE_BOOL.match(line)
+        if m and m.group(1) in ("on", "off", "yes", "no", "y", "n"):
+            fail.append("%s:%d: bare '%s' - quote it, ruby reads it as a boolean"
+                        % (name, i, m.group(1)))
+if not any("bare '" in f for f in fail):
+    print("  OK   no bare YAML 1.1 booleans (ruby would turn them into false)")
+
+# --- 8. the workflow copies --------------------------------------------------
+# fix-exec.sh (and its PowerShell twin) copies automation/*.yml on top of
+# .github/workflows/*.yml. If the copies drift, following the documented
+# "fix" silently reverts changes made to the real workflows.
+workflows = os.path.join(ROOT, ".github", "workflows")
+automation = os.path.join(ROOT, "automation")
+if os.path.isdir(workflows) and os.path.isdir(automation):
+    drift = []
+    for name in sorted(os.listdir(workflows)):
+        if not name.endswith(".yml"):
+            continue
+        canonical = os.path.join(workflows, name)
+        copy = os.path.join(automation, name)
+        if not os.path.isfile(copy):
+            drift.append("%s (missing in automation/)" % name)
+            continue
+        with open(canonical, "rb") as fh:
+            left = fh.read()
+        with open(copy, "rb") as fh:
+            right = fh.read()
+        if left != right:
+            drift.append(name)
+    if drift:
+        fail.append("workflow copies differ: %s - sync automation/ with .github/workflows/"
+                    % ", ".join(drift))
+    else:
+        print("  OK   automation/*.yml matches .github/workflows/*.yml")
 
 print()
 if fail:

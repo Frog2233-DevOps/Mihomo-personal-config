@@ -35,7 +35,11 @@ if command -v curl >/dev/null 2>&1; then
     curl -s -m 10 "http://$API/proxies" -o "$TMP"
   fi
 elif command -v uclient-fetch >/dev/null 2>&1; then
-  uclient-fetch -q -T 10 -o "$TMP" "http://$API/proxies"
+  if [ -n "$SECRET" ]; then
+    uclient-fetch -q -T 10 -O "$TMP" --header="Authorization: Bearer $SECRET" "http://$API/proxies"
+  else
+    uclient-fetch -q -T 10 -O "$TMP" "http://$API/proxies"
+  fi
 else
   echo "ERROR: neither curl nor uclient-fetch is available"
   exit 1
@@ -44,6 +48,13 @@ fi
 if [ ! -s "$TMP" ]; then
   echo "ERROR: no answer from http://$API/proxies"
   echo "       Is OpenClash running? Is the dashboard password set?"
+  exit 1
+fi
+# A 401 body is a non-empty answer too. Without this check every group is
+# reported as NOT FOUND and the warnings below print a false "OK".
+if ! grep -q '"proxies"' "$TMP"; then
+  echo "ERROR: the API did not return the proxy list: $(head -c 160 "$TMP")"
+  echo "       Check the API address and the dashboard password (SECRET)."
   exit 1
 fi
 

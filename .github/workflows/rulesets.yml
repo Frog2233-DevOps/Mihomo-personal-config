@@ -43,6 +43,8 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # the files that came through the API have no executable bit - set it
+          # once here, the commit below carries the mode into the repository
           chmod +x scripts/*.sh scripts/*.py
           git add ruleset scripts
           if git diff --staged --quiet; then
@@ -66,7 +68,11 @@ jobs:
           ROUTER_PATH: ${{ secrets.ROUTER_PATH }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           CONFIG: RU-Mihomo.yaml
-          RESTART: "0"
+          # reload: the core reads its config again through its own API, the
+          # proxy stays up. restart: OpenClash is restarted, the proxy is
+          # down for half a minute. none: the new lists are used after the
+          # next restart.
+          APPLY: "reload"
         run: |
           set -e
           if [ -z "$ROUTER_HOST" ] || [ -z "$SSH_PRIVATE_KEY" ]; then
@@ -78,4 +84,25 @@ jobs:
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           export SSH_KEY=~/.ssh/deploy_key
-          ./scripts/deploy.sh
+          bash ./scripts/deploy.sh
+
+      - name: Check what the router has now
+        env:
+          ROUTER_HOST: ${{ secrets.ROUTER_HOST }}
+          ROUTER_USER: ${{ secrets.ROUTER_USER }}
+          ROUTER_PORT: ${{ secrets.ROUTER_PORT }}
+          ROUTER_PATH: ${{ secrets.ROUTER_PATH }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -e
+          if [ -z "$ROUTER_HOST" ] || [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "no router - nothing to check"
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -p ${ROUTER_PORT:-22} -i ~/.ssh/deploy_key"
+          ssh $SSH_OPTS "${ROUTER_USER:-root}@$ROUTER_HOST" \
+            "ls '${ROUTER_PATH:-/etc/openclash}'/ruleset/*.mrs | wc -l; \
+             APPLY=check sh '${ROUTER_PATH:-/etc/openclash}'/scripts/apply-rulesets.sh"

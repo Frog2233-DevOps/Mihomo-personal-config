@@ -33,7 +33,8 @@ variants.
 (`instagram.com`), and in mihomo a bare domain with `behavior: domain` matches
 **only that exact domain** - `www.instagram.com` slips through. Measured: with
 a bare list 0 of 12 subdomains matched, with the `+.` prefix 12 of 12. The
-build script adds the prefix before converting to `.mrs`.
+build script adds the prefix before converting to `.mrs`; hyphens stay in the
+domain characters, so entries like `01-klinika-21.ru` are not lost.
 
 **The rule order is derived from the overlaps, not from taste.**
 
@@ -71,12 +72,13 @@ LAN could drive the proxy. The geo databases (16.5 + 4.4 MB) are switched off
 because this config never reads them. The dashboard zip is not downloaded
 because the core unpacks it without any integrity check.
 
-Details and measurements: [docs/DESIGN.md](docs/DESIGN.md).
+Details and measurements: [docs/DESIGN.md](docs/DESIGN.md), in Russian:
+[docs/DESIGN-RU.md](docs/DESIGN-RU.md).
 
 ## The proxy groups
 
 18 groups, emoji in the names. Full description in
-[docs/GROUPS.md](docs/GROUPS.md).
+[docs/GROUPS.md](docs/GROUPS.md) / [docs/GROUPS-RU.md](docs/GROUPS-RU.md).
 
 | Group | Type | What it is for |
 |---|---|---|
@@ -137,15 +139,20 @@ otherwise they keep the old URL.
 | `ruleset/` | 28 compiled rule-sets, 1.5 MB |
 | `scripts/build-ruleset.sh` | rebuilds the rule-sets from the upstream lists |
 | `scripts/make-lite.sh`, `scripts/make-smart.sh` | regenerate the variants |
+| `scripts/install.sh` | one-command installation on the router: downloads the config, scripts and all 28 rule-sets, substitutes the placeholders, verifies the result |
 | `scripts/deploy.sh` | copies the config and the rule-sets to the router over SSH |
 | `scripts/check-groups.sh` | runs on the router: what ended up in every group |
-| `scripts/update-rulesets.sh` | runs on the router: rebuilds the rule-sets with its own core and restarts OpenClash - the lists update themselves |
+| `scripts/update-rulesets.sh` | runs on the router: rebuilds the rule-sets with its own core, installs them and applies them - the lists update themselves |
+| `scripts/apply-rulesets.sh` | runs on the router: tells the running core to reload its config through its own API, without a restart |
 | `scripts/fix-exec.sh`, `scripts/fix-exec.ps1` | mark the scripts as executable (bash and PowerShell) |
 | `scripts/selftest.sh` | `mihomo -t` on every config + the checks on the filters, the groups and the files |
+| `tests/run-all.sh` | the full regression suite (configs, normalizer, scripts, docs, workflows); `tests/04_cycle.sh` checks the deploy/apply cycle on a real router |
 | `docs/DESIGN.md` | why every decision was made, with the measurements |
 | `docs/INSTALL.md` | installation on OpenWrt / OpenClash |
 | `docs/GROUPS.md` | what every group is for |
 | `docs/RULESETS.md` | where the lists come from and how they are built |
+| `docs/TEST-REPORT.md`, `docs/TEST-REPORT-RU.md` | the integration test report, EN and RU |
+| `docs/*-RU.md` | the same documents in Russian |
 | `AGENTS.md` | the rules that must not be broken, for AI models and for humans |
 
 ## Numbers
@@ -180,6 +187,14 @@ The scripts themselves are bash, so run them from Git Bash or WSL:
 ```sh
 bash scripts/build-ruleset.sh
 bash scripts/selftest.sh
+bash tests/run-all.sh
+```
+
+The last command is also what CI runs on every pull request. With a router
+(or the WR3000S QEMU emulator) you can check the whole delivery cycle:
+
+```sh
+ROUTER_HOST=192.168.1.1 ROUTER_PORT=22 SECRET=<password> bash tests/04_cycle.sh
 ```
 
 ## Sources of the rule lists

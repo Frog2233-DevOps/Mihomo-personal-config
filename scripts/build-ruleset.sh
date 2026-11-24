@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # =============================================================================
 #  build-ruleset.sh - build the .mrs rule files for RU-Mihomo
 # =============================================================================
@@ -109,8 +109,11 @@ normalize() { # normalize <in> <out>
       # already prefixed entries stay as they are
       if (line ~ /^\+\./) { print line; next }
       if (line ~ /^\*\./) { print "+." substr(line, 3); next }
-      # drop junk lines
-      if (line !~ /^[A-Za-z0-9_.]+$/) { next }
+      # Drop non-domain lines (adblock syntax, URLs, spaces, ...).
+      # A hyphen is a legal character in a hostname label (and in punycode,
+      # e.g. xn--...), so it must stay in the class: dropping it silently
+      # removes domains such as "01-klinika-21.ru" from the RKN list.
+      if (line !~ /^[A-Za-z0-9_.-]+$/) { next }
       # IP-like strings do not belong in a domain file
       if (line ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/) { next }
       print "+." line
@@ -209,7 +212,9 @@ log "fake-ip-filter.mrs" "$(du -h "$OUT/fake-ip-filter.mrs" 2>/dev/null | cut -f
 step "5. Result"
 total=0
 for f in "$OUT"/*.mrs; do
-  sz=$(stat -c%s "$f" 2>/dev/null || echo 0)
+  # The GNU-only stat size format prints 0 for every file under busybox.
+  # wc -c is POSIX and works in both places.
+  sz=$(wc -c < "$f" 2>/dev/null || echo 0)
   total=$((total + sz))
 done
 printf '  Files: %s, total: %s\n' "$(ls -1 "$OUT"/*.mrs 2>/dev/null | wc -l)" "$(du -sh "$OUT" | cut -f1)"

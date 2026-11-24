@@ -30,11 +30,24 @@ Never edit the generated files by hand - the next generation overwrites it.
 
 ```sh
 ./scripts/selftest.sh
+bash tests/run-all.sh
 ```
 
-It runs `mihomo -t` on all three configs and checks the filters, the groups,
-the rule targets and the rule-set files. A pull request that does not pass
-it will not be merged.
+`selftest.sh` runs `mihomo -t` on all three configs and checks the filters,
+the groups, the rule targets and the rule-set files. `tests/run-all.sh` adds
+regression tests for the normalizer, the deploy flags, the busybox build,
+the API checks, the docs and the workflows. A pull request that does not
+pass both will not be merged.
+
+With a real router (or the WR3000S QEMU emulator from 4pda topic 1087457,
+post #10376) the full cycle can be checked as well:
+
+```sh
+ROUTER_HOST=192.168.1.1 ROUTER_PORT=22 SECRET=<dashboard-password> \
+  bash tests/04_cycle.sh
+```
+
+CI runs `tests/run-all.sh` on every pull request.
 
 ## Rules that must not be broken
 
@@ -74,6 +87,33 @@ These are not style preferences, each of them has a reason that was measured.
     overwrite the design of this config.
 11. **Plain aliases only, no `<<:` merge keys.** Both work, but a plain
     alias is also readable for tools that do not implement merge keys.
+12. **The domain normalizer must accept hyphens.** `scripts/build-ruleset.sh`
+    uses `^[A-Za-z0-9_.-]+$` for a bare domain. Removing `-` silently drops
+    valid entries (`01-klinika-21.ru`, `xn--...`): measured 20 833 of 82 146
+    lines lost from the RKN list on 2026-11-23.
+13. **`deploy.sh` must use `-P` for scp and `-p` for ssh.** scp reads `-p` as
+    "preserve times", so a custom `ROUTER_PORT` used to be treated as a local
+    filename. The legacy `-O` flag is tried first because dropbear has no
+    SFTP server; do not remove the fallback.
+14. **Count bytes with `wc -c`, never GNU `stat -c%s`.** The router's busybox
+    `stat` prints 0 for every file, so the build summary lied about its size.
+15. **`check-groups.sh` must validate the API answer.** A 401 body is not an
+    empty answer: without a `"proxies"` check every group was printed as
+    `NOT FOUND` and the warnings reported a false `OK`. The `uclient-fetch`
+    fallback must pass `--header="Authorization: Bearer ..."`.
+16. **`scripts/install.sh` is the one-command installer and must stay POSIX.**
+    Download everything into a temp directory first, then install, so a failed
+    download changes nothing; never print `SUB_URL` or `DASHBOARD_PASSWORD`;
+    keep the user's `lists/custom-domains.list` on a reinstall; back up a
+    changed config as `.bak`. Its embedded `RULESETS` list must match
+    `ruleset/` exactly - `tests/07_install.sh` checks it, as well as the
+    placeholder escaping, all three variants and the atomic failure path.
+17. **The router must refresh the lists on its own.** The daily GitHub rebuild
+    only commits files to the repository - without router secrets it never
+    reaches the device. `scripts/install.sh` therefore adds the
+    `update-rulesets.sh` line to root's crontab for the default
+    `/etc/openclash`, preserving other entries and avoiding duplicates;
+    `ENABLE_CRON=0` opts out. `tests/07_install.sh` verifies the cron line.
 
 ## The DNS scheme
 
@@ -104,6 +144,8 @@ are still reachable through `🎯 Manual`.
 
 * `README.md` and `README-RU.md` describe the same thing in two
   languages. Keep them in sync when you change the installation steps.
+* The documents come in pairs: `docs/DESIGN.md` and `docs/DESIGN-RU.md`,
+  and the same for `INSTALL`, `GROUPS` and `RULESETS`. Change both.
 * The file is UTF-8, but everything except the emoji in the group names is
   ASCII. The Russian words in the regexes are written as `\x{...}`.
 * The group names carry an emoji and are quoted: `- name: "🚀 Auto"`.
@@ -113,6 +155,8 @@ are still reachable through `🎯 Manual`.
   `docs/DESIGN.md`, and every statement there has a measurement behind it.
 * One subscription, `proxy-providers -> Main`. The URL is a placeholder
   (`PASTE_SUBSCRIPTION_URL_HERE`); OpenClash substitutes the real one.
+* The shell scripts and the lists keep LF line endings (`.gitattributes`).
+  A CRLF breaks them on the router.
 
 ## The rule-sets on the router
 
@@ -121,6 +165,42 @@ The rule-sets are local files and the router refreshes them itself with
 script tries the direct link first and then the mirrors - keep that order
 when you add a source: `raw.githubusercontent.com` is not always fast from
 Russia.
+
+The scripts take the root of the repository from their own location (the
+folder above `scripts/`), so on the router they keep the layout of the
+repository: `/etc/openclash/scripts/` and `/etc/openclash/lists/` side by
+side, the result in `/etc/openclash/ruleset/`. Copied flat into
+`/etc/openclash/` the root becomes `/etc` and the build fails with
+`/etc/lists/custom-domains.list not found`. `update-rulesets.sh` checks the
+layout before it builds. If you add a file that the build reads from the
+repository, install it on the router in the same relative place and say so in
+`docs/INSTALL.md`.
+
+OpenWrt has no `/etc/cron.d`: the cron job goes into the crontab of root
+(`docs/INSTALL.md`, section 5.1).
+
+## Applying the rule-sets
+
+The core reads the rule-sets when it loads the config, so a new list is not in
+use until the core is told to read it again. `scripts/apply-rulesets.sh` does
+that, and it has four modes:
+
+| `APPLY=` | What happens |
+|---|---|
+| `reload` (default) | `PUT /configs?force=true` on the running core: it reloads its config and reads the new files, the proxy stays up. Measured: the rule count of a provider changes without a restart. |
+| `restart` | `/etc/init.d/openclash restart`. The fallback when the reload fails. |
+| `none` | Nothing. The lists are used after the next restart. |
+| `check` | Only looks: how many rule-providers the core has and how many rules. |
+
+The secret and the API address are read out of the config the core runs with
+(`/etc/openclash/<name>.yaml`), because that is where OpenClash writes them
+(`yml_change.sh`). Keep `apply-rulesets.sh` POSIX `sh`: it runs on the router,
+where only busybox ash exists.
+
+`scripts/deploy.sh` copies the scripts into `scripts/` on the router (not
+flat into `/etc/openclash/`), strips the carriage returns and applies the
+result. It uses `scp -O` when the local scp knows the flag: OpenSSH 9 copies
+over SFTP by default and the dropbear of OpenWrt has no `sftp-server`.
 
 ## Adding a new service group
 

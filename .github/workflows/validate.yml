@@ -2,7 +2,7 @@ name: Validate
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
   workflow_dispatch:
 
@@ -49,3 +49,8 @@ jobs:
         env:
           MIHOMO: ./mihomo
           MIHOMO_SMART: ./mihomo-smart
+
+      - name: Full test suite
+        run: bash ./tests/run-all.sh
+        env:
+          MIHOMO: ./mihomo

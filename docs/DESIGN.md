@@ -1,5 +1,7 @@
 # Design notes
 
+**English** | [Русский](DESIGN-RU.md)
+
 Every statement in this file was measured, not read from a README. Where a
 number is given, this is how it was obtained.
 
@@ -215,6 +217,22 @@ implementation, so lookaheads do work if you ever need one.
 still identical to `noise-filter` - otherwise an LTE node could slip into an
 automatic group.
 
+### The probe URL
+
+Every automatic group measures its nodes against
+`https://cp.cloudflare.com/generate_204`. HTTPS, not HTTP: the probe travels
+through the node that is being measured, and a plain HTTP answer can be forged
+by anything on the way. The TLS handshake is part of the measurement, that is
+the point. The URL is one YAML anchor (`&probe-url`), so all the groups and the
+health check of the provider use the same one.
+
+### `find-process-mode`
+
+`off`. On a router the traffic of the clients is forwarded - there is no local
+process to look for, and this config has no `PROCESS-NAME` rules. The lookup
+would only cost CPU. (The default of mihomo is `strict`, which looks up the
+process for traffic that comes from the device itself.)
+
 ---
 
 ## 6. The proxy groups
@@ -319,3 +337,27 @@ a fallback that does not depend on the smart core.
   the smart config does not either as long as `prefer-asn` stays `false`.
   Check the working directory of the router if the flash usage is higher
   than expected.
+
+### Testing on the WR3000S emulator
+
+The full cycle was checked on a real QEMU emulation of the board, not only on
+a PC. The emulator is `github.com/stavultras/router-emulator` v4.1 with the
+`nand-wr3000s` flash folder, linked from 4pda topic 1087457, post #10376. The
+official Cudy web emulator (`support.cudy.com/emulator/WR3000S`) is only a
+simulator of the stock web UI and cannot run OpenWrt or mihomo.
+
+Measured in the emulator: OpenWrt 25.12.5 boots, 256 MB RAM, an 84.8 MB
+overlay, kernel 6.12.94. `mihomo v1.19.33` runs with all 28 rule providers
+(252 793 rules), RSS 37 MB with five test nodes. A request to
+`01-klinika-21.ru` matched `RuleSet/rkn-blocked`, so the hyphen fix works
+end to end. `check-groups.sh` showed the Russian node only in `🎯 Manual`
+and no LTE/info node in any group. `update-rulesets.sh APPLY=reload`
+rebuilt all 28 files on the router and reloaded the live core through its
+API without a restart.
+
+What the emulator cannot reproduce: the radio is silent (no real Wi-Fi), the
+WAN is QEMU user-mode NAT (no real ISP path, no actual RKN blocking), and
+OpenClash itself was not installed - the core was launched directly with the
+config that OpenClash would produce. It is still a real OpenWrt system with
+the target RAM/flash layout, which is why the shell scripts and the core
+behave the same way as on the device.
