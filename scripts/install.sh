@@ -212,7 +212,7 @@ fi
 
 log "installed $CFG + $installed rule-sets into $ROOT"
 if [ "$ENABLE_CRON" = "1" ]; then
-  log "the router will rebuild the lists daily at 05:00 (cron)"
+  log "the router will rebuild the lists daily at 05:30 (cron)"
 else
   log "cron was not installed - ENABLE_CRON=1 enables it (docs/INSTALL.md)"
 fi
