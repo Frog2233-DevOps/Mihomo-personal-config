@@ -5,9 +5,10 @@
 #  Run it on the router (or from a PC that can reach the API):
 #      sh check-groups.sh
 #
-#  It asks the mihomo API which nodes ended up in which group and warns when
-#  a node that must not be used (LTE server, subscription info node) slipped
-#  into a group, or when a Russian node ended up in an automatic group.
+#  It asks the mihomo API which nodes ended up in which group, what every group
+#  points to right now ("now:") and warns when a node that must not be used
+#  (LTE server, subscription info node) slipped into a group, or when a Russian
+#  node ended up in an automatic group.
 #
 #  Environment variables:
 #      API      - address of the mihomo API (default: 127.0.0.1:9090)
@@ -65,6 +66,43 @@ members_of() { # members_of <group name>
     | tr ',' '\n' | sed 's/^"//; s/"$//' | grep -v '^$'
 }
 
+# What a group points to right now. The automatic groups have it as well
+# (the node they picked), so this shows what the config really does.
+#
+# The JSON of a group is an object with nested objects ("extra"), so a plain
+# sed cannot cut it off. This awk walks the string and counts the braces:
+# the group ends where its depth returns to zero.
+now_of() { # now_of <group name>
+  awk -v want="$1" '
+    BEGIN { RS = "\0" }
+    {
+      s = $0
+      gsub(/\n/, "", s)
+      key = "\"" want "\":{"
+      start = index(s, key)
+      if (start == 0) exit
+      i = start + length(key) - 1
+      depth = 1; inq = 0; out = ""
+      while (i <= length(s)) {
+        c = substr(s, i, 1)
+        if (inq) {
+          out = out c
+          if (c == "\\") { i++; out = out substr(s, i, 1) }
+          else if (c == "\"") inq = 0
+          i++
+          continue
+        }
+        if (c == "\"") { inq = 1; out = out c; i++; continue }
+        if (c == "{") depth++
+        else if (c == "}") { depth--; if (depth == 0) break }
+        out = out c
+        i++
+      }
+      if (match(out, /"now":"[^"]*"/)) print substr(out, RSTART + 7, RLENGTH - 8)
+    }
+  ' "$TMP"
+}
+
 show() { # show <group name>
   name="$1"
   members="$(members_of "$name")"
@@ -73,7 +111,12 @@ show() { # show <group name>
     return
   fi
   count="$(printf '%s\n' "$members" | grep -c .)"
-  printf '  %-16s %s node(s)\n' "$name" "$count"
+  now="$(now_of "$name")"
+  if [ -n "$now" ]; then
+    printf '  %-16s %s node(s)   now: %s\n' "$name" "$count" "$now"
+  else
+    printf '  %-16s %s node(s)\n' "$name" "$count"
+  fi
   printf '%s\n' "$members" | sed 's/^/      /'
 }
 
