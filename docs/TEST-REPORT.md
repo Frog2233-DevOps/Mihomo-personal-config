@@ -63,11 +63,18 @@ findings 3-7 were found during the emulator run and are fixed in this change.
 | `04_cycle.sh` | 13 (on the emulator) | deploy to a non-default port, layout, 28 rule-sets, live rule providers, bad-secret rejection, fixed router scripts |
 | `05_docs.sh` | 28 | EN/RU pairs, section parity, full lifecycle, troubleshooting, AI-agent notes |
 | `06_workflows.sh` | 8 | workflow copies byte-identical, guard, apply step, CI entry point |
-| `07_install.sh` | 30 | installer syntax/POSIX, rule-set list sync, a real local HTTP install, placeholder escaping with special characters, no credentials in the log, reinstall safety, all variants, atomic failure |
+| `07_install.sh` | 35 | installer syntax/POSIX, rule-set list sync, a real local HTTP install, placeholder escaping with special characters, no credentials in the log, reinstall safety, all variants, atomic failure |
 
 `scripts/selftest.sh` also passes with the real core. The CI (non-router)
-part of `tests/run-all.sh` is now 125 checks; the optional router cycle adds
+part of `tests/run-all.sh` is now 130 checks; the optional router cycle adds
 13 more.
+
+The installer also wires the daily refresh into the router's crontab when
+`ROOT=/etc/openclash` (or `ENABLE_CRON=1`). The GitHub workflow only commits
+new rule-sets to the repository - there are no router secrets configured here,
+so without the router cron the device would keep stale lists forever.
+Verified with a stub `crontab` (other entries kept, no duplicate on reinstall)
+and on the live emulator: one `update-rulesets.sh` line after two installs.
 
 ## One-command installer
 
@@ -83,7 +90,7 @@ download fails.
 It was also verified as an unprivileged user with a custom ROOT.
 
 It was verified twice: by `tests/07_install.sh` against a local HTTP server
-(30 checks, including `|`, `&` and `\` in the credentials and the three
+(35 checks, including `|`, `&` and `\` in the credentials and the three
 variants), and on the live emulated router with `BASE_URL` pointing at the
 host. The router run installed all 28 rule-sets, wrote `secret: testpass`
 and the subscription URL verbatim, marked the scripts executable and skipped

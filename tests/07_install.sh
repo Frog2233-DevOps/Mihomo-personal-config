@@ -115,6 +115,39 @@ else
   skip "non-root check (already non-root or no runuser)"
 fi
 
+section "9. the installer sets up the daily cron without duplicates"
+CRONDIR="$TMPDIR_TEST/cronbin"; mkdir -p "$CRONDIR"
+CRONLOG="$TMPDIR_TEST/crontab.log"; : > "$CRONLOG"
+CRONSTATE="$TMPDIR_TEST/cronstate"
+printf '%s\n' '0 1 * * * /usr/bin/true' > "$CRONSTATE"
+cat > "$CRONDIR/crontab" <<EOF
+#!/bin/sh
+if [ "\$1" = "-l" ]; then cat "$CRONSTATE"; exit 0; fi
+cat "\$1" > "$CRONSTATE"
+cat "\$1" >> "$CRONLOG"
+EOF
+chmod +x "$CRONDIR/crontab"
+D="$TMPDIR_TEST/router-cron"; mkdir -p "$D"
+for run in 1 2; do
+  PATH="$CRONDIR:$PATH" BASE_URL="http://127.0.0.1:$PORT" ROOT="$D" \
+    VARIANT=full ENABLE_CRON=1 SUB_URL="$SUB" DASHBOARD_PASSWORD="$PW" \
+    sh scripts/install.sh >"$TMPDIR_TEST/cron-$run.log" 2>&1
+done
+if grep -qF '0 1 * * * /usr/bin/true' "$CRONLOG"; then ok "existing cron entries kept"; else bad "existing crontab entries lost"; fi
+if [ "$(grep -c 'update-rulesets.sh' "$CRONSTATE")" -eq 1 ]; then
+  ok "one cron line after two installs (no duplicates)"
+else
+  bad "cron line count wrong: $(grep -c 'update-rulesets.sh' "$CRONSTATE")"
+fi
+if grep -qF "$D/scripts/update-rulesets.sh" "$CRONLOG"; then ok "cron points at the installed script"; else bad "cron path wrong"; fi
+if grep -q 'cron installed' "$TMPDIR_TEST/cron-1.log"; then ok "cron setup reported"; else bad "cron setup not reported"; fi
+
+D="$TMPDIR_TEST/router-nocron"; mkdir -p "$D"
+BASE_URL="http://127.0.0.1:$PORT" ROOT="$D" VARIANT=full ENABLE_CRON=0 \
+  SUB_URL="$SUB" DASHBOARD_PASSWORD="$PW" \
+  sh scripts/install.sh >"$TMPDIR_TEST/nocron.log" 2>&1
+if grep -q 'cron was not installed' "$TMPDIR_TEST/nocron.log"; then ok "ENABLE_CRON=0 respected"; else bad "ENABLE_CRON=0 ignored"; fi
+
 kill "$HTTP_PID" 2>/dev/null || true
 trap - EXIT
 cd "$ROOT"

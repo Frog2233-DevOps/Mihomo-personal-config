@@ -19,6 +19,8 @@
 #      REPO               owner/repo, for forks
 #      ROOT               router config root (default: /etc/openclash)
 #      BASE_URL           override the download root (for local testing)
+#      ENABLE_CRON        install the daily router cron (default: on for
+#                         /etc/openclash, off for a custom ROOT); 0 disables it
 #
 #  What it does: downloads the config, the overwrite file, the scripts, the
 #  custom list and all 28 compiled rule-sets into the OpenClash layout,
@@ -34,6 +36,10 @@ VARIANT="${VARIANT:-full}"
 SUB_URL="${SUB_URL:-}"
 DASHBOARD_PASSWORD="${DASHBOARD_PASSWORD:-}"
 BASE_URL="${BASE_URL:-}"
+ENABLE_CRON="${ENABLE_CRON:-}"
+if [ -z "$ENABLE_CRON" ]; then
+  if [ "$ROOT" = "/etc/openclash" ]; then ENABLE_CRON=1; else ENABLE_CRON=0; fi
+fi
 
 # Keep in sync with ruleset/ - tests/07_install.sh checks this list against
 # the repository, so a new rule-set cannot be forgotten here.
@@ -149,6 +155,33 @@ for r in $RULESETS; do
   cp "$TMP/ruleset/$r.mrs" "$ROOT/ruleset/$r.mrs" || fail "cannot install ruleset/$r.mrs"
 done
 
+# --- the router refreshes the lists itself ----------------------------------
+# OpenWrt has no /etc/cron.d: the job goes into root's crontab. Keep OpenClash's
+# own entries and never add the same line twice.
+setup_cron() {
+  if ! command -v crontab >/dev/null 2>&1; then
+    log "crontab not found - add the daily rule-set job manually (docs/INSTALL.md)"
+    return 0
+  fi
+  line="30 5 * * * $ROOT/scripts/update-rulesets.sh >/tmp/update-rulesets.log 2>&1"
+  ct="$TMP/crontab"
+  (crontab -l 2>/dev/null || true) | grep -v 'update-rulesets.sh' >"$ct" || true
+  printf '%s\n' "$line" >>"$ct"
+  if crontab "$ct" 2>/dev/null; then
+    if [ -x /etc/init.d/cron ]; then
+      /etc/init.d/cron enable >/dev/null 2>&1 || true
+      /etc/init.d/cron restart >/dev/null 2>&1 || true
+    fi
+    log "cron installed: $line"
+  else
+    log "cannot write the crontab - add the daily job manually (docs/INSTALL.md)"
+  fi
+}
+
+if [ "$ENABLE_CRON" = "1" ]; then
+  setup_cron
+fi
+
 # --- verify -----------------------------------------------------------------
 installed=0
 for f in "$ROOT"/ruleset/*.mrs; do
@@ -178,6 +211,11 @@ else
 fi
 
 log "installed $CFG + $installed rule-sets into $ROOT"
+if [ "$ENABLE_CRON" = "1" ]; then
+  log "the router will rebuild the lists daily at 05:00 (cron)"
+else
+  log "cron was not installed - ENABLE_CRON=1 enables it (docs/INSTALL.md)"
+fi
 log "next steps:"
 log "  1. In LuCI: OpenClash -> Config Manage -> Config Subscribe, import"
 log "     $ROOT/backup/RU-Mihomo.conf (or pick it in the overwrite settings)."

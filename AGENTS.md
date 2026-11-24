@@ -108,6 +108,12 @@ These are not style preferences, each of them has a reason that was measured.
     changed config as `.bak`. Its embedded `RULESETS` list must match
     `ruleset/` exactly - `tests/07_install.sh` checks it, as well as the
     placeholder escaping, all three variants and the atomic failure path.
+17. **The router must refresh the lists on its own.** The daily GitHub rebuild
+    only commits files to the repository - without router secrets it never
+    reaches the device. `scripts/install.sh` therefore adds the
+    `update-rulesets.sh` line to root's crontab for the default
+    `/etc/openclash`, preserving other entries and avoiding duplicates;
+    `ENABLE_CRON=0` opts out. `tests/07_install.sh` verifies the cron line.
 
 ## The DNS scheme
 

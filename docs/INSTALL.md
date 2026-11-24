@@ -39,14 +39,17 @@ It works directly on the router under `sh` (no bash, python or jq needed) and:
   config and the overwrite file (the credentials are never printed);
 * installs everything into the OpenClash layout, keeps an existing custom
   list, backs up a changed config as `.bak`;
-* checks the file count and runs `mihomo -t` if a core is already present.
+* checks the file count and runs `mihomo -t` if a core is already present;
+* installs the **daily rule-set refresh** into the router's crontab when the
+  default `ROOT=/etc/openclash` is used, keeping existing entries and never
+  adding the line twice (section 5.1).
 
 Nothing is installed until every download has succeeded, so a network failure
 leaves the current setup untouched.
 
 Options: `VARIANT=lite|smart` (default `full`), `BRANCH=dev` to test the
 integration branch, `REPO=owner/repo` for a fork, `ROOT=<dir>` for another
-config root. Example:
+config root, `ENABLE_CRON=0|1` to override the automatic cron setup. Example:
 
 ```sh
 VARIANT=lite BRANCH=dev SUB_URL='...' DASHBOARD_PASSWORD='...' sh /tmp/install.sh
@@ -274,8 +277,10 @@ ones below them (or all of them and run the script again).
 #### The cron
 
 OpenWrt has no `/etc/cron.d`; the cron of the router is the crontab of root, and
-OpenClash keeps its own tasks in the same crontab. Add the line, do not
-overwrite the file:
+OpenClash keeps its own tasks in the same crontab. **`scripts/install.sh`
+adds this line automatically** (unless `ENABLE_CRON=0`), preserves the other
+entries and does not duplicate the job on a reinstall. If you installed by
+hand, add the line without overwriting the file:
 
 ```sh
 ssh root@192.168.1.1 "(crontab -l 2>/dev/null | grep -v update-rulesets; echo '30 5 * * * /etc/openclash/scripts/update-rulesets.sh >/tmp/update-rulesets.log 2>&1') | crontab - && /etc/init.d/cron enable && /etc/init.d/cron restart"
