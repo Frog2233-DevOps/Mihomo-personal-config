@@ -53,7 +53,11 @@ case "$VARIANT" in
   smart) CFG=RU-Mihomo-smart.yaml ;;
   *)     fail "VARIANT must be full, lite or smart (got: $VARIANT)" ;;
 esac
-[ "$(id -u)" = "0" ] || fail "run as root"
+# Root is only required for the system path. A custom ROOT (tests, another
+# user's config directory) works with normal permissions.
+if [ "$ROOT" = "/etc/openclash" ] && [ "$(id -u)" != "0" ]; then
+  fail "run as root (or set ROOT to a directory you own)"
+fi
 
 # --- downloader ------------------------------------------------------------
 DL=""

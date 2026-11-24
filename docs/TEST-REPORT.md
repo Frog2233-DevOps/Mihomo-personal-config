@@ -63,10 +63,10 @@ findings 3-7 were found during the emulator run and are fixed in this change.
 | `04_cycle.sh` | 13 (on the emulator) | deploy to a non-default port, layout, 28 rule-sets, live rule providers, bad-secret rejection, fixed router scripts |
 | `05_docs.sh` | 28 | EN/RU pairs, section parity, full lifecycle, troubleshooting, AI-agent notes |
 | `06_workflows.sh` | 8 | workflow copies byte-identical, guard, apply step, CI entry point |
-| `07_install.sh` | 29 | installer syntax/POSIX, rule-set list sync, a real local HTTP install, placeholder escaping with special characters, no credentials in the log, reinstall safety, all variants, atomic failure |
+| `07_install.sh` | 30 | installer syntax/POSIX, rule-set list sync, a real local HTTP install, placeholder escaping with special characters, no credentials in the log, reinstall safety, all variants, atomic failure |
 
 `scripts/selftest.sh` also passes with the real core. The CI (non-router)
-part of `tests/run-all.sh` is now 119 checks; the optional router cycle adds
+part of `tests/run-all.sh` is now 125 checks; the optional router cycle adds
 13 more.
 
 ## One-command installer
@@ -80,8 +80,10 @@ layout. It keeps the user's custom list, backs up a modified config as `.bak`,
 never prints credentials and leaves the existing setup untouched if any
 download fails.
 
+It was also verified as an unprivileged user with a custom ROOT.
+
 It was verified twice: by `tests/07_install.sh` against a local HTTP server
-(29 checks, including `|`, `&` and `\` in the credentials and the three
+(30 checks, including `|`, `&` and `\` in the credentials and the three
 variants), and on the live emulated router with `BASE_URL` pointing at the
 host. The router run installed all 28 rule-sets, wrote `secret: testpass`
 and the subscription URL verbatim, marked the scripts executable and skipped

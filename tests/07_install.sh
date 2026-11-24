@@ -104,6 +104,17 @@ else
   ok "failed download changed nothing"
 fi
 
+section "8. a custom ROOT works without root privileges"
+if command -v runuser >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+  D="$TMPDIR_TEST/router-nonroot"; mkdir -p "$D"; chmod 777 "$D"
+  runuser -u nobody -- env ROOT="$D" BASE_URL="http://127.0.0.1:$PORT" \
+    VARIANT=full SUB_URL="$SUB" DASHBOARD_PASSWORD="$PW" \
+    sh "$ROOT/scripts/install.sh" >"$TMPDIR_TEST/nonroot.log" 2>&1
+  if [ -f "$D/config/RU-Mihomo.yaml" ]; then ok "installed as nobody into a custom ROOT"; else bad "non-root install failed: $(tail -2 "$TMPDIR_TEST/nonroot.log")"; fi
+else
+  skip "non-root check (already non-root or no runuser)"
+fi
+
 kill "$HTTP_PID" 2>/dev/null || true
 trap - EXIT
 cd "$ROOT"
