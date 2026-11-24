@@ -101,6 +101,13 @@ These are not style preferences, each of them has a reason that was measured.
     empty answer: without a `"proxies"` check every group was printed as
     `NOT FOUND` and the warnings reported a false `OK`. The `uclient-fetch`
     fallback must pass `--header="Authorization: Bearer ..."`.
+16. **`scripts/install.sh` is the one-command installer and must stay POSIX.**
+    Download everything into a temp directory first, then install, so a failed
+    download changes nothing; never print `SUB_URL` or `DASHBOARD_PASSWORD`;
+    keep the user's `lists/custom-domains.list` on a reinstall; back up a
+    changed config as `.bak`. Its embedded `RULESETS` list must match
+    `ruleset/` exactly - `tests/07_install.sh` checks it, as well as the
+    placeholder escaping, all three variants and the atomic failure path.
 
 ## The DNS scheme
 

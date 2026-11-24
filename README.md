@@ -139,6 +139,7 @@ otherwise they keep the old URL.
 | `ruleset/` | 28 compiled rule-sets, 1.5 MB |
 | `scripts/build-ruleset.sh` | rebuilds the rule-sets from the upstream lists |
 | `scripts/make-lite.sh`, `scripts/make-smart.sh` | regenerate the variants |
+| `scripts/install.sh` | one-command installation on the router: downloads the config, scripts and all 28 rule-sets, substitutes the placeholders, verifies the result |
 | `scripts/deploy.sh` | copies the config and the rule-sets to the router over SSH |
 | `scripts/check-groups.sh` | runs on the router: what ended up in every group |
 | `scripts/update-rulesets.sh` | runs on the router: rebuilds the rule-sets with its own core, installs them and applies them - the lists update themselves |

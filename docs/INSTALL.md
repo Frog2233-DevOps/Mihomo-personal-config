@@ -17,6 +17,48 @@ the stock dropbear of OpenWrt has no `sftp-server`. Every `scp` below has `-O`
 
 ---
 
+## Quick install
+
+After OpenClash is installed (section 1), the whole configuration can be put
+on the router with one script:
+
+```sh
+curl -fsSL -o /tmp/install.sh \
+  https://raw.githubusercontent.com/Frog2233-DevOps/Mihomo-personal-config/main/scripts/install.sh
+# read /tmp/install.sh before running it - it came from the network
+SUB_URL='https://your-provider/subscription-link' \
+DASHBOARD_PASSWORD='your-own-password' \
+  sh /tmp/install.sh
+```
+
+It works directly on the router under `sh` (no bash, python or jq needed) and:
+
+* downloads `RU-Mihomo.yaml`, `RU-Mihomo.conf`, the four helper scripts,
+  `lists/custom-domains.list` and all 28 compiled rule-sets;
+* substitutes the subscription URL and the dashboard password in both the
+  config and the overwrite file (the credentials are never printed);
+* installs everything into the OpenClash layout, keeps an existing custom
+  list, backs up a changed config as `.bak`;
+* checks the file count and runs `mihomo -t` if a core is already present.
+
+Nothing is installed until every download has succeeded, so a network failure
+leaves the current setup untouched.
+
+Options: `VARIANT=lite|smart` (default `full`), `BRANCH=dev` to test the
+integration branch, `REPO=owner/repo` for a fork, `ROOT=<dir>` for another
+config root. Example:
+
+```sh
+VARIANT=lite BRANCH=dev SUB_URL='...' DASHBOARD_PASSWORD='...' sh /tmp/install.sh
+```
+
+The script does **not** install OpenClash, reflash the router or change the
+flash layout (section 0), and it does not start OpenClash. After it finishes,
+import the overwrite file in LuCI and restart the plugin as described in
+section 4. For a manual installation, follow sections 2-5.
+
+---
+
 ## 0. Before you start: the flash layout matters
 
 The `mihomo` arm64 binary is 57.5 MB and takes 25-29 MB in UBIFS. Together

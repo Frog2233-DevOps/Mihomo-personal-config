@@ -35,6 +35,13 @@ for f in docs/INSTALL.md docs/INSTALL-RU.md; do
   if grep -q '^## .*Troubleshoot\|^## .*Проблемы\|^## .*не так\|^## .*типичн' "$f"; then ok "$f has a troubleshooting section"; else bad "$f has no troubleshooting section"; fi
 done
 
+section "4a. the one-command installer is documented"
+has README.md "scripts/install.sh"
+has README-RU.md "scripts/install.sh"
+if grep -q '^## Quick install' docs/INSTALL.md; then ok "EN install guide has the quick install"; else bad "EN install guide misses the quick install"; fi
+if grep -q '^## Быстрая установка' docs/INSTALL-RU.md; then ok "RU install guide has the quick install"; else bad "RU install guide misses the quick install"; fi
+has AGENTS.md "is the one-command installer"
+
 section "5. information for AI agents"
 has AGENTS.md "Rules that must not be broken"
 has AGENTS.md "The DNS scheme"
