@@ -158,6 +158,13 @@ are still reachable through `🎯 Manual`.
 * The shell scripts and the lists keep LF line endings (`.gitattributes`).
   A CRLF breaks them on the router.
 
+18. **Do not put `no-resolve` on the `private` rule.** The `private` rule-set
+    is an IP list; matching a domain against it needs a resolution. With
+    `no-resolve` a local host by name stops matching it and is sent to the
+    proxy instead - measured: `nas.test` -> `192.168.1.10` gives
+    `match RuleSet(private) using DIRECT` without the option and
+    `match Match using PROXY` with it. The option was measured and rejected.
+
 ## The rule-sets on the router
 
 The rule-sets are local files and the router refreshes them itself with

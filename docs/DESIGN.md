@@ -177,6 +177,25 @@ the `+.` prefix (DOMAIN-SUFFIX), 12 of 12.
 `scripts/build-ruleset.sh` adds the prefix before the conversion, so the
 lists in `ruleset/` are correct.
 
+### `no-resolve` on the private rule
+
+The `private` rule-set is an IP list (`behavior: ipcidr`). To match a domain
+against it, the core has to resolve the domain first. `no-resolve` skips that
+resolution - and then a local host by name stops matching the private rule.
+
+Measured with mihomo v1.19.33, fake-ip and a local DNS server, a request to
+`nas.test` that resolves to `192.168.1.10`:
+
+| Rule | What the core does |
+|---|---|
+| `RULE-SET,private,DIRECT` | `match RuleSet(private) using DIRECT` |
+| `RULE-SET,private,DIRECT,no-resolve` | `match Match using PROXY` |
+
+The second row sends the local host to the proxy. The domains of the
+`fake-ip-filter` are not affected (their IP is known before the rules run),
+but every other local name is. So the option stays off - it was measured and
+rejected, not overlooked.
+
 ### `behavior: classical` with `format: mrs`
 
 Such a rule is **silently not matched** - 0 of 12 domains instead of 12 of
