@@ -210,6 +210,59 @@ else
   log "no core found yet - mihomo -t skipped until OpenClash is started"
 fi
 
+# --- tell OpenClash about it -------------------------------------------------
+# OpenClash keeps its settings in UCI. Without these three things the plugin
+# keeps using the old config, the old password and the old subscription.
+# The file is backed up first: a working setup must stay recoverable.
+UCI_CONFIG="${UCI_CONFIG:-/etc/config/openclash}"
+# The OpenClash settings are only touched on a real router with the default
+# root. CONFIGURE_OPENCLASH=1 forces it (the tests use that).
+CONFIGURE_OPENCLASH="${CONFIGURE_OPENCLASH:-}"
+if [ -z "$CONFIGURE_OPENCLASH" ]; then
+  if [ "$ROOT" = "/etc/openclash" ]; then CONFIGURE_OPENCLASH=1; else CONFIGURE_OPENCLASH=0; fi
+fi
+configure_openclash() {
+  command -v uci >/dev/null 2>&1 || { log "no uci found - OpenClash was not configured"; return 0; }
+  [ -f "$UCI_CONFIG" ] || { log "$UCI_CONFIG not found - OpenClash was not configured"; return 0; }
+
+  cp "$UCI_CONFIG" "$UCI_CONFIG.bak.$$" || fail "cannot back up $UCI_CONFIG"
+  log "OpenClash settings backed up to $UCI_CONFIG.bak.$$"
+
+  uci -q set openclash.config.dashboard_password="$DASHBOARD_PASSWORD"
+  uci -q set openclash.config.config_path="$ROOT/config/$CFG"
+  uci -q set openclash.config.enable='1'
+
+  # The subscription belongs to the section whose name is the config file name
+  # without the extension ("RU-Mihomo" for RU-Mihomo.yaml).
+  sub_name="$(basename "$CFG" .yaml)"
+  idx=""
+  i=0
+  while s="$(uci -q get "openclash.subscribe_info[$i].name" 2>/dev/null)"; do
+    if [ "$s" = "$sub_name" ]; then idx="$i"; break; fi
+    i=$((i + 1))
+  done
+  if [ -z "$idx" ]; then
+    idx="$(uci -q add openclash.subscribe_info 2>/dev/null || true)"
+    if [ -n "$idx" ]; then
+      uci -q set "openclash.$idx.name"="$sub_name"
+    fi
+  else
+    uci -q delete "openclash.subscribe_info[$idx].url" 2>/dev/null
+  fi
+  if [ -n "$idx" ]; then
+    uci -q add_list "openclash.$idx.url"="$SUB_URL" 2>/dev/null \
+      || uci -q add_list "openclash.subscribe_info[$idx].url"="$SUB_URL"
+  fi
+  uci -q commit openclash
+  log "OpenClash configured: $CFG, dashboard password and subscription set"
+}
+
+if [ "$CONFIGURE_OPENCLASH" = "1" ]; then
+  configure_openclash
+else
+  log "the OpenClash settings were not touched (CONFIGURE_OPENCLASH=0)"
+fi
+
 log "installed $CFG + $installed rule-sets into $ROOT"
 if [ "$ENABLE_CRON" = "1" ]; then
   log "the router will rebuild the lists daily at 05:30 (cron)"

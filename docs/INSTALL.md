@@ -42,7 +42,10 @@ It works directly on the router under `sh` (no bash, python or jq needed) and:
 * checks the file count and runs `mihomo -t` if a core is already present;
 * installs the **daily rule-set refresh** into the router's crontab when the
   default `ROOT=/etc/openclash` is used, keeping existing entries and never
-  adding the line twice (section 5.1).
+  adding the line twice (section 5.1);
+* writes the OpenClash settings through UCI: the dashboard password, the path
+  of the config and the subscription. `/etc/config/openclash` is copied to
+  `openclash.bak.<pid>` first - a working setup stays recoverable.
 
 Nothing is installed until every download has succeeded, so a network failure
 leaves the current setup untouched.
@@ -57,8 +60,10 @@ VARIANT=lite BRANCH=dev SUB_URL='...' DASHBOARD_PASSWORD='...' sh /tmp/install.s
 
 The script does **not** install OpenClash, reflash the router or change the
 flash layout (section 0), and it does not start OpenClash. After it finishes,
-import the overwrite file in LuCI and restart the plugin as described in
-section 4. For a manual installation, follow sections 2-5.
+import the overwrite file in LuCI (the script writes the subscription and the
+password itself, but the overwrite file still has to be imported once) and
+restart the plugin as described in section 4. For a manual installation,
+follow sections 2-5.
 
 ---
 

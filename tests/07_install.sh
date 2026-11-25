@@ -148,6 +148,69 @@ BASE_URL="http://127.0.0.1:$PORT" ROOT="$D" VARIANT=full ENABLE_CRON=0 \
   sh scripts/install.sh >"$TMPDIR_TEST/nocron.log" 2>&1
 if grep -q 'cron was not installed' "$TMPDIR_TEST/nocron.log"; then ok "ENABLE_CRON=0 respected"; else bad "ENABLE_CRON=0 ignored"; fi
 
+section "10. the OpenClash settings are written through uci"
+UCI_DIR="$TMPDIR_TEST/uci"
+mkdir -p "$UCI_DIR"
+: > "$UCI_DIR/openclash"
+cat > "$TMPDIR_TEST/bin_uci" <<'UCI'
+#!/bin/sh
+# A fake uci: it keeps the calls in a log and answers "get" from the log.
+LOG="$FAKE_UCI_LOG"
+STORE="$FAKE_UCI_STORE"
+shift 2>/dev/null   # drop -q
+cmd="$1"; shift
+case "$cmd" in
+  set)    echo "set $*" >> "$LOG"; echo "$*" >> "$STORE" ;;
+  add)    echo "add $*" >> "$LOG"; echo "subscribe_info[0]" ;;
+  delete) echo "delete $*" >> "$LOG" ;;
+  add_list) echo "add_list $*" >> "$LOG"; echo "$*" >> "$STORE" ;;
+  commit) echo "commit $*" >> "$LOG" ;;
+  get)
+    key="$1"
+    v="$(grep -F "$key=" "$STORE" 2>/dev/null | tail -1 | cut -d= -f2-)"
+    [ -n "$v" ] || exit 1
+    echo "$v"
+    ;;
+esac
+exit 0
+UCI
+mkdir -p "$TMPDIR_TEST/fakebin"
+cp "$TMPDIR_TEST/bin_uci" "$TMPDIR_TEST/fakebin/uci"
+chmod +x "$TMPDIR_TEST/fakebin/uci"
+: > "$TMPDIR_TEST/uci.log"
+: > "$TMPDIR_TEST/uci.store"
+D="$TMPDIR_TEST/router-uci"; mkdir -p "$D"
+PATH="$TMPDIR_TEST/fakebin:$PATH" FAKE_UCI_LOG="$TMPDIR_TEST/uci.log" FAKE_UCI_STORE="$TMPDIR_TEST/uci.store" \
+  BASE_URL="http://127.0.0.1:$PORT" ROOT="$D" VARIANT=full UCI_CONFIG="$UCI_DIR/openclash" \
+  CONFIGURE_OPENCLASH=1 \
+  SUB_URL="$SUB" DASHBOARD_PASSWORD="$PW" \
+  sh scripts/install.sh >"$TMPDIR_TEST/uci-install.log" 2>&1
+if grep -qF "openclash.config.dashboard_password=$PW" "$TMPDIR_TEST/uci.log"; then
+  ok "the dashboard password was written"
+else
+  bad "the dashboard password was not written"
+fi
+if grep -qF "openclash.config.config_path=$D/config/RU-Mihomo.yaml" "$TMPDIR_TEST/uci.log"; then
+  ok "the config path was written"
+else
+  bad "the config path was not written"
+fi
+if grep -qF "url=$SUB" "$TMPDIR_TEST/uci.log"; then
+  ok "the subscription was written"
+else
+  bad "the subscription was not written"
+fi
+if grep -q "commit openclash" "$TMPDIR_TEST/uci.log"; then
+  ok "the settings were committed"
+else
+  bad "the settings were not committed"
+fi
+if [ -f "$UCI_DIR/openclash.bak."* ]; then
+  ok "the old settings were backed up"
+else
+  bad "no backup of the settings"
+fi
+
 kill "$HTTP_PID" 2>/dev/null || true
 trap - EXIT
 cd "$ROOT"
