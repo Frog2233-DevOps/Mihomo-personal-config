@@ -139,14 +139,14 @@ otherwise they keep the old URL.
 | `ruleset/` | 28 compiled rule-sets, 1.5 MB |
 | `scripts/build-ruleset.sh` | rebuilds the rule-sets from the upstream lists |
 | `scripts/make-lite.sh`, `scripts/make-smart.sh` | regenerate the variants |
-| `scripts/install.sh` | one-command installation on the router: downloads the config, scripts and all 28 rule-sets, substitutes the placeholders, verifies the result |
+| `scripts/install.sh` | one-command installation on the router: downloads the config, scripts and all 28 rule-sets, substitutes the placeholders, writes the OpenClash settings through UCI, verifies the result |
 | `scripts/deploy.sh` | copies the config and the rule-sets to the router over SSH |
 | `scripts/check-groups.sh` | runs on the router: what ended up in every group |
 | `scripts/update-rulesets.sh` | runs on the router: rebuilds the rule-sets with its own core, installs them and applies them - the lists update themselves |
 | `scripts/apply-rulesets.sh` | runs on the router: tells the running core to reload its config through its own API, without a restart |
 | `scripts/fix-exec.sh`, `scripts/fix-exec.ps1` | mark the scripts as executable (bash and PowerShell) |
 | `scripts/selftest.sh` | `mihomo -t` on every config + the checks on the filters, the groups and the files |
-| `tests/run-all.sh` | the full regression suite (configs, normalizer, scripts, docs, workflows); `tests/04_cycle.sh` checks the deploy/apply cycle on a real router |
+| `tests/run-all.sh` | the full regression suite (configs, normalizer, scripts, docs, workflows); `tests/08_rehearsal.sh` runs the whole router cycle locally against a real core, `tests/04_cycle.sh` checks it on a real router |
 | `docs/DESIGN.md` | why every decision was made, with the measurements |
 | `docs/INSTALL.md` | installation on OpenWrt / OpenClash |
 | `docs/GROUPS.md` | what every group is for |
