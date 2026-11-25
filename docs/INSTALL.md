@@ -58,10 +58,12 @@ config root, `ENABLE_CRON=0|1` to override the automatic cron setup. Example:
 VARIANT=lite BRANCH=dev SUB_URL='...' DASHBOARD_PASSWORD='...' sh /tmp/install.sh
 ```
 
+The overwrite file is placed in `/etc/openclash/overwrite/` and gets its own
+UCI section, so OpenClash applies it on the next start - nothing has to be
+imported in LuCI by hand.
+
 The script does **not** install OpenClash, reflash the router or change the
 flash layout (section 0), and it does not start OpenClash. After it finishes,
-import the overwrite file in LuCI (the script writes the subscription and the
-password itself, but the overwrite file still has to be imported once) and
 restart the plugin as described in section 4. For a manual installation,
 follow sections 2-5.
 

@@ -70,11 +70,11 @@ findings 3-7 were found during the emulator run and are fixed in this change.
 | `04_cycle.sh` | 13 (on the emulator) | deploy to a non-default port, layout, 28 rule-sets, live rule providers, bad-secret rejection, fixed router scripts |
 | `05_docs.sh` | 28 | EN/RU pairs, section parity, full lifecycle, troubleshooting, AI-agent notes |
 | `06_workflows.sh` | 8 | workflow copies byte-identical, guard, apply step, CI entry point |
-| `07_install.sh` | 40 | installer syntax/POSIX, rule-set list sync, a real local HTTP install, placeholder escaping with special characters, no credentials in the log, reinstall safety, all variants, atomic failure |
+| `07_install.sh` | 43 | installer syntax/POSIX, rule-set list sync, a real local HTTP install, placeholder escaping with special characters, no credentials in the log, reinstall safety, all variants, atomic failure |
 | `08_rehearsal.sh` | 27 | the whole router cycle on this machine: `install.sh` into a router-like layout, the ruby rewrite OpenClash does, the core starts, `check-groups.sh`, `update-rulesets.sh` rebuilding with the router's own core, the apply through the API without a restart, the rules still matching |
 
 `scripts/selftest.sh` also passes with the real core. The CI (non-router)
-part of `tests/run-all.sh` is now 162 checks; the optional router cycle adds
+part of `tests/run-all.sh` is now 165 checks; the optional router cycle adds
 13 more.
 
 `08_rehearsal.sh` is the suite that found findings 8 and 9: it runs the

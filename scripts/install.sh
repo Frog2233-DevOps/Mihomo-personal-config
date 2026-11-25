@@ -138,6 +138,10 @@ set_target() { # set_target <source> <destination>
 set_target "$TMP/config.yaml"     "$ROOT/config/$CFG"
 set_target "$TMP/overwrite.conf"  "$ROOT/backup/RU-Mihomo.conf"
 set_target "$TMP/overwrite.conf"  "$ROOT/RU-Mihomo.conf"
+# The overwrite file has to lie in overwrite/ - that is where OpenClash looks
+# for it (init.d: overwrite_file).
+mkdir -p "$ROOT/overwrite"
+set_target "$TMP/overwrite.conf" "$ROOT/overwrite/RU-Mihomo.conf"
 
 for s in build-ruleset.sh update-rulesets.sh apply-rulesets.sh check-groups.sh; do
   set_target "$TMP/scripts/$s" "$ROOT/scripts/$s"
@@ -253,8 +257,29 @@ configure_openclash() {
     uci -q add_list "openclash.$idx.url"="$SUB_URL" 2>/dev/null \
       || uci -q add_list "openclash.subscribe_info[$idx].url"="$SUB_URL"
   fi
+  # The overwrite file needs a UCI section of its own: OpenClash processes
+  # /etc/openclash/overwrite/<name> only when a config_overwrite section
+  # points at it.
+  sub_name="$(basename "$CFG" .yaml)"
+  ow_name="RU-Mihomo"
+  idx=""
+  i=0
+  while s="$(uci -q get "openclash.config_overwrite[$i].name" 2>/dev/null)"; do
+    if [ "$s" = "$ow_name" ]; then idx="$i"; break; fi
+    i=$((i + 1))
+  done
+  if [ -z "$idx" ]; then
+    idx="$(uci -q add openclash.config_overwrite 2>/dev/null || true)"
+    [ -n "$idx" ] && uci -q set "openclash.$idx.name"="$ow_name"
+  fi
+  if [ -n "$idx" ]; then
+    uci -q set "openclash.$idx.enable"='1'
+    uci -q delete "openclash.$idx.config" 2>/dev/null
+    uci -q add_list "openclash.$idx.config"="$ROOT/config/$CFG"
+  fi
+
   uci -q commit openclash
-  log "OpenClash configured: $CFG, dashboard password and subscription set"
+  log "OpenClash configured: $CFG, dashboard password, subscription and overwrite file"
 }
 
 if [ "$CONFIGURE_OPENCLASH" = "1" ]; then

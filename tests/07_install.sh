@@ -210,6 +210,21 @@ if [ -f "$UCI_DIR/openclash.bak."* ]; then
 else
   bad "no backup of the settings"
 fi
+if grep -qF "openclash.config_overwrite" "$TMPDIR_TEST/uci.log"; then
+  ok "the overwrite file got its own UCI section"
+else
+  bad "no config_overwrite section"
+fi
+if grep -qF "enable=1" "$TMPDIR_TEST/uci.log"; then
+  ok "the overwrite section is enabled"
+else
+  bad "the overwrite section is not enabled"
+fi
+if [ -f "$D/overwrite/RU-Mihomo.conf" ]; then
+  ok "the overwrite file lies in overwrite/"
+else
+  bad "the overwrite file is not in overwrite/"
+fi
 
 kill "$HTTP_PID" 2>/dev/null || true
 trap - EXIT
