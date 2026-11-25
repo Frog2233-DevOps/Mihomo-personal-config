@@ -34,6 +34,8 @@ booted normally.
 | 5 | `build-ruleset.sh` counted bytes with GNU `stat -c%s` | The router build printed `Bytes: 0` for a 1.8 MB directory | low: misleading output |
 | 6 | `check-groups.sh` accepted a 401 body as a valid answer | Every group printed `NOT FOUND`, then both warnings printed a false `OK` | high: false "everything fine" |
 | 7 | `check-groups.sh`'s `uclient-fetch` fallback used `-o` instead of `-O` and sent no Authorization header | No authenticated answer without curl | medium: broken fallback |
+| 8 | `apply-rulesets.sh` searched the process list for the first line containing "clash" or "mihomo" | On the router its own path is `/etc/openclash/scripts/apply-rulesets.sh` - the script found ITSELF, found no `-f` in it and gave up ("the running config was not found") | high: the rule-sets were never applied, only the restart fallback ran |
+| 9 | `build-ruleset.sh` could only download with `curl` | A plain OpenWrt has no curl; the daily cron would fail with "curl: not found" | medium: the daily refresh dies without a package |
 
 Findings 1 and 2 were already fixed on `dev` by PR #4 before this round;
 findings 3-7 were found during the emulator run and are fixed in this change.
@@ -45,6 +47,11 @@ findings 3-7 were found during the emulator run and are fixed in this change.
 * `scripts/build-ruleset.sh`: byte counts use POSIX `wc -c`.
 * `scripts/check-groups.sh`: rejects any answer without `"proxies"`; the
   `uclient-fetch` fallback uses `-O` and passes the Bearer token.
+* `scripts/apply-rulesets.sh`: the process search takes the first command line
+  that contains `-f ` **and** whose file exists - the script can no longer find
+  itself (its path contains "openclash").
+* `scripts/build-ruleset.sh`: the downloader is chosen at runtime - `curl`,
+  `uclient-fetch` (busybox) or `wget`.
 * `tests/`: new regression suite, wired into `.github/workflows/validate.yml`
   (and its `automation/` copy) so CI runs it on every pull request.
 * Docs: EN/RU installation, design and README updated; troubleshooting got
@@ -64,10 +71,22 @@ findings 3-7 were found during the emulator run and are fixed in this change.
 | `05_docs.sh` | 28 | EN/RU pairs, section parity, full lifecycle, troubleshooting, AI-agent notes |
 | `06_workflows.sh` | 8 | workflow copies byte-identical, guard, apply step, CI entry point |
 | `07_install.sh` | 35 | installer syntax/POSIX, rule-set list sync, a real local HTTP install, placeholder escaping with special characters, no credentials in the log, reinstall safety, all variants, atomic failure |
+| `08_rehearsal.sh` | 27 | the whole router cycle on this machine: `install.sh` into a router-like layout, the ruby rewrite OpenClash does, the core starts, `check-groups.sh`, `update-rulesets.sh` rebuilding with the router's own core, the apply through the API without a restart, the rules still matching |
 
 `scripts/selftest.sh` also passes with the real core. The CI (non-router)
-part of `tests/run-all.sh` is now 130 checks; the optional router cycle adds
+part of `tests/run-all.sh` is now 157 checks; the optional router cycle adds
 13 more.
+
+`08_rehearsal.sh` is the suite that found findings 8 and 9: it runs the
+scripts of the router in the layout of the router, against a real core and a
+real ruby rewrite. It needs `MIHOMO`, `python3` and (optionally) `ruby`:
+
+```sh
+MIHOMO=/path/to/mihomo bash tests/08_rehearsal.sh
+```
+
+The ports are chosen per run, so a leftover core of an earlier run cannot
+steal the API of this one.
 
 The installer also wires the daily refresh into the router's crontab when
 `ROOT=/etc/openclash` (or `ENABLE_CRON=1`). The GitHub workflow only commits

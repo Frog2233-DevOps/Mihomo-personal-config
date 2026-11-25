@@ -47,21 +47,47 @@ fi
 
 mkdir -p "$OUT"
 
+# The downloader. curl comes with OpenClash, but on a plain OpenWrt there is
+# only uclient-fetch (busybox) and wget - and this script runs unattended from
+# the cron of the router.
+DL=""
+for c in curl uclient-fetch wget; do
+  if command -v "$c" >/dev/null 2>&1; then DL="$c"; break; fi
+done
+if [ -z "$DL" ]; then
+  echo "ERROR: no curl, uclient-fetch or wget found - cannot download the lists"
+  exit 1
+fi
+
 log()  { printf '  %-26s %s\n' "$1" "$2"; }
 step() { printf '\n=== %s ===\n' "$1"; }
 
 # The direct link first, then the mirrors. From a router in Russia
 # raw.githubusercontent.com is not always fast, and sometimes blocked.
 # fetch <dest> <url> [url ...]
+#
+# curl is what OpenClash installs, but a plain OpenWrt has only uclient-fetch
+# (busybox) and wget. The daily cron must not depend on one package being
+# there - the build runs on the router, unattended.
+fetch_one() { # fetch_one <url> <dest>
+  case "$DL" in
+    curl)
+      curl -fsSL --retry 2 --retry-delay 2 --connect-timeout 15 "$1" -o "$2" 2>/dev/null ;;
+    uclient-fetch)
+      uclient-fetch -q -T 20 -O "$2" "$1" 2>/dev/null ;;
+    wget)
+      wget -q -T 20 -O "$2" "$1" 2>/dev/null ;;
+  esac
+}
+
 fetch() {
   dest="$1"; shift
   for u in "$@"; do
-    if curl -fsSL --retry 2 --retry-delay 2 --connect-timeout 15 "$u" -o "$dest" 2>/dev/null \
-       && [ -s "$dest" ]; then
+    if fetch_one "$u" "$dest" && [ -s "$dest" ]; then
       return 0
     fi
+    rm -f "$dest"
   done
-  rm -f "$dest"
   return 1
 }
 

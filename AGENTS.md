@@ -115,6 +115,20 @@ These are not style preferences, each of them has a reason that was measured.
     `/etc/openclash`, preserving other entries and avoiding duplicates;
     `ENABLE_CRON=0` opts out. `tests/07_install.sh` verifies the cron line.
 
+19. **A process search must not find the script itself.** `apply-rulesets.sh`
+    looks for the config of the running core. The first command line that
+    contains "clash" or "mihomo" is not necessarily the core: on the router
+    the script's own path is `/etc/openclash/scripts/apply-rulesets.sh`. Take
+    the first line that contains `-f ` **and** whose file exists.
+20. **The scripts on the router must not depend on one downloader.** OpenClash
+    installs `curl`, but a plain OpenWrt has only `uclient-fetch` and `wget`.
+    Choose the downloader at runtime; the daily cron runs unattended.
+21. **The router cycle has a local rehearsal.** `tests/08_rehearsal.sh` runs
+    `install.sh`, the ruby rewrite of OpenClash, the core, `check-groups.sh`,
+    `update-rulesets.sh` and the apply through the API - in the layout of the
+    router, on a real core. It found two bugs that the other suites missed.
+    Run it after every change to the scripts that run on the router.
+
 ## The DNS scheme
 
 * DoH by IP (`1.1.1.1`, `9.9.9.9`) - a hostname needs a resolver in the

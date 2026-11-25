@@ -48,25 +48,46 @@ SECRET="${SECRET:-}"
 
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
 
+# A scratch file for the intermediate result of the process search. It has to
+# be a file and not a variable: the search runs in a subshell (a pipe), and a
+# subshell cannot write back into the parent.
+TMP_OUT="/tmp/apply-rulesets.$$.cfg"
+trap 'rm -f "$TMP_OUT"' EXIT HUP INT TERM
+
 # --- the config the core runs with -------------------------------------------
 # "ps w" on busybox prints the whole command line:
 #   /bin/sh -c exec /etc/openclash/core/clash_meta -d /etc/openclash -f /etc/openclash/RU-Mihomo.yaml
 find_running_config() {
   if [ -n "$CONFIG_FILE" ]; then printf '%s' "$CONFIG_FILE"; return 0; fi
-  cfg="$(ps w 2>/dev/null | grep -E 'clash|mihomo' | grep -v grep | head -1 |
-         sed -n 's/.*[ ]-f[ ]\([^ ]*\).*/\1/p')"
-  if [ -z "$cfg" ]; then
-    # /proc as a fallback: "ps" does not always show the command line
+  cfg=""
+
+  # 1. ps. On busybox "ps w" prints the whole command line:
+  #    /bin/sh -c exec /etc/openclash/core/clash_meta -d /etc/openclash -f /etc/openclash/RU-Mihomo.yaml
+  ps w 2>/dev/null | grep -E 'clash|mihomo' | grep -v grep | while read -r line; do
+    p="$(printf '%s' "$line" | sed -n 's/.*[ ]-f[ ]\([^ ]*\).*/\1/p')"
+    if [ -n "$p" ] && [ -f "$p" ]; then printf '%s' "$p"; break; fi
+  done > "$TMP_OUT"
+
+  # 2. /proc, for the systems where ps does not show the arguments. The
+  #    command line of a process must contain "-f " and the file behind it
+  #    must exist - otherwise this script would find ITSELF (on the router
+  #    its own path contains "openclash") and stop with an empty result.
+  if [ ! -s "$TMP_OUT" ]; then
     for p in /proc/[0-9]*/cmdline; do
       [ -r "$p" ] || continue
       c="$(tr '\0' ' ' < "$p" 2>/dev/null)"
       case "$c" in
-        *clash*|*mihomo*)
-          cfg="$(printf '%s' "$c" | sed -n 's/.*[ ]-f[ ]\([^ ]*\).*/\1/p')"
-          break ;;
+        *"-f "*) ;;
+        *) continue ;;
       esac
-    done
+      q="$(printf '%s' "$c" | sed -n 's/.*[ ]-f[ ]\([^ ]*\).*/\1/p')"
+      if [ -n "$q" ] && [ -f "$q" ]; then printf '%s' "$q"; break; fi
+    done > "$TMP_OUT"
   fi
+
+  cfg="$(cat "$TMP_OUT" 2>/dev/null)"
+  rm -f "$TMP_OUT"
+
   # a relative path belongs to the working directory of the core
   if [ -n "$cfg" ] && [ "${cfg#/}" = "$cfg" ]; then
     d="$(dirname "$cfg")"; b="$(basename "$cfg")"
