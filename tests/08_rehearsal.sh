@@ -118,13 +118,18 @@ section "3. the rewrite OpenClash does on every start"
 # load the config, change what OpenClash changes, write it back.
 if command -v ruby >/dev/null 2>&1; then
   cat > "$BASE/rewrite.rb" <<'RUBY'
+# The rewrite of OpenClash (yml_change.sh loads the config with its own
+# YAML.rb, which maps load to unsafe_load and therefore accepts the aliases
+# of the config). On a machine without that file the plain Psych is used with
+# unsafe_load_file - the same effect.
 require 'yaml'
-$LOAD_PATH.unshift '/workspace/repos/OpenClash/luci-app-openclash/root/usr/share/openclash'
+data = nil
 begin
+  $LOAD_PATH.unshift(ENV['OPENCLASH_YAML_RB'] || '/workspace/repos/OpenClash/luci-app-openclash/root/usr/share/openclash')
   require 'YAML'
   data = YAML.load_file(ARGV[0])
-rescue LoadError
-  data = YAML.load_file(ARGV[0])
+rescue LoadError, StandardError
+  data = YAML.unsafe_load_file(ARGV[0])
 end
 data['secret'] = ARGV[2] if ARGV[2] && !ARGV[2].empty?
 data['external-controller'] = '0.0.0.0:' + ARGV[1]
