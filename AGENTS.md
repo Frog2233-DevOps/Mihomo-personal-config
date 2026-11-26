@@ -152,6 +152,16 @@ These are not style preferences, each of them has a reason that was measured.
     happens to the traffic that was selected. When a service has to go
     through the proxy, it needs a list in MagiTrickle - a rule in
     `RU-Mihomo-mixomo.yaml` alone changes nothing.
+25. **The ports that bypass the core use ACCEPT, not RETURN.** In the
+    mangle table a `RETURN` from a chain only means "back to PREROUTING and
+    keep looking": a packet that MagiTrickle already marked would stay
+    marked and would still go into the core. `ACCEPT` ends the traversal of
+    the table, the packet keeps its normal route. The chain of
+    `scripts/bypass-ports.sh` is hooked into `PREROUTING` in the first
+    position, because the chains of MagiTrickle are inserted there too -
+    and MagiTrickle restores the position of its own chains after a
+    restart by the rules around them, so a rule of ours in front of them
+    stays in front of them.
 
 ## The DNS scheme
 

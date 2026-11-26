@@ -140,6 +140,7 @@ the line and never touches the core.
 | `scripts/setup-mixomo.sh` | installs the scheme on the router |
 | `scripts/gen-mtrickle.sh` | writes the state of MagiTrickle from the rule-sets |
 | `scripts/update-mixomo.sh` | the daily refresh of the rule-sets |
+| `scripts/bypass-ports.sh`, `scripts/mixomo-bypass.init` | keep the traffic of the listed ports out of the core (a Rust server with a lot of UDP, for example) |
 
 ```sh
 curl -fsSL https://github.com/Internet-Helper/mixomo-openwrt/raw/main/install.sh | sh
@@ -147,6 +148,10 @@ curl -fsSL -o /tmp/setup-mixomo.sh \
   https://raw.githubusercontent.com/Frog2233-DevOps/Mihomo-personal-config/main/scripts/setup-mixomo.sh
 SUB_URL='...' DASHBOARD_PASSWORD='...' sh /tmp/setup-mixomo.sh
 ```
+
+The traffic of the ports in `/etc/mihomo/bypass-ports.txt` never reaches the
+core at all - it goes straight to the provider. That is what a Rust server
+with a lot of UDP needs.
 
 `docs/MIXOMO.md` explains the scheme, the lists and the checks.
 

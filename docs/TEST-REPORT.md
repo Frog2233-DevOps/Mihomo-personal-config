@@ -72,11 +72,11 @@ findings 3-7 were found during the emulator run and are fixed in this change.
 | `06_workflows.sh` | 8 | workflow copies byte-identical, guard, apply step, CI entry point |
 | `07_install.sh` | 43 | installer syntax/POSIX, rule-set list sync, a real local HTTP install, placeholder escaping with special characters, no credentials in the log, reinstall safety, all variants, atomic failure |
 | `08_rehearsal.sh` | 27 | the whole router cycle on this machine: `install.sh` into a router-like layout, the ruby rewrite OpenClash does, the core starts, `check-groups.sh`, `update-rulesets.sh` rebuilding with the router's own core, the apply through the API without a restart, the rules still matching |
-| `09_mixomo.sh` | 67 | the mixomo scheme: `mihomo -t` on the new config, the keys mixomo needs, the paths of its layout, the state of MagiTrickle (structure, ids, interfaces, the fields the two builds read differently), the `.mtrickle` file, `gen-mtrickle.sh` rebuilding a state file from the rule-sets, POSIX syntax of the three new scripts |
-| `10_mixomo_rehearsal.sh` | 24 | the installation of the scheme on this machine: `setup-mixomo.sh` installs the config, the 28 rule-sets, the scripts and the state of MagiTrickle from a local copy of the repository, the placeholders are substituted, a second run keeps the own list, the password does not reach the log |
+| `09_mixomo.sh` | 80 | the mixomo scheme: `mihomo -t` on the new config, the keys mixomo needs, the paths of its layout, the state of MagiTrickle (structure, ids, interfaces, the fields the two builds read differently), the `.mtrickle` file, `gen-mtrickle.sh` rebuilding a state file from the rule-sets, POSIX syntax of the three new scripts |
+| `10_mixomo_rehearsal.sh` | 41 | the installation of the scheme on this machine: `setup-mixomo.sh` installs the config, the 28 rule-sets, the scripts and the state of MagiTrickle from a local copy of the repository, the placeholders are substituted, a second run keeps the own list, the password does not reach the log |
 
 `scripts/selftest.sh` also passes with the real core. The CI (non-router)
-part of `tests/run-all.sh` is now 257 checks; the optional router cycle adds
+part of `tests/run-all.sh` is now 287 checks; the optional router cycle adds
 13 more.
 
 `08_rehearsal.sh` is the suite that found findings 8 and 9: it runs the
@@ -192,6 +192,48 @@ on the router.
    domain (or one CIDR) per line. The anti-AD list turned out to be plain
    too (`anti-ad-domains.txt`, 110 923 lines), and the Re-filter lists are
    plain as well - so all of them work as a subscription.
+
+### The ports that bypass the core
+
+The user asked for the Rust servers to stay out of the core completely: the
+UDP pipeline of the core is the bottleneck, and the packets of a game server
+get lost on the way.
+
+The scheme gives that for free **for the addresses that MagiTrickle does not
+mark** - the traffic of a server that is on no list never reaches the core.
+But a Rust server can be on the RKN list, and then it is marked and goes
+into the core like everything else. The port is known, the address is not
+always.
+
+So the ports were added as a rule of their own:
+
+* `scripts/bypass-ports.sh` builds a chain of its own (`MIXOMO_BYPASS`) with
+  one rule per port and protocol and hooks it into `PREROUTING` of the
+  `mangle` and the `nat` table, in the first position - in front of the
+  chains of MagiTrickle.
+* **ACCEPT, not RETURN.** A `RETURN` from a chain of the mangle table only
+  means "back to PREROUTING and keep looking": a packet that MagiTrickle
+  marked would stay marked and would still go into the core. `ACCEPT` ends
+  the traversal of the table, and the packet keeps its normal route to the
+  provider. This is the same reason the `direct` mode of the mod build of
+  MagiTrickle uses ACCEPT and not RETURN
+  (`src/backend/utils/netfilterTools/ipset-to-link.go`).
+* **The position survives a restart of MagiTrickle.** MagiTrickle inserts
+  its own chains into `PREROUTING` as well and restores their position
+  after a restart by the rules around them (the "anchors",
+  `src/backend/utils/iptables/jump-recovery.go`). A rule of ours that
+  stands in front of them is part of that anchor and stays in front of
+  them.
+* The init script `/etc/init.d/mixomo-bypass` starts MagiTrickle first and
+  hooks the rule in afterwards; it is enabled at the installation.
+* The list of the ports is `/etc/mihomo/bypass-ports.txt` and belongs to the
+  user: the installer never overwrites it, and it takes the ports from
+  `BYPASS_PORTS` on the first installation.
+
+Verified with a stub of iptables (`tests/10_mixomo_rehearsal.sh`): the rules
+are added for TCP and UDP, for both tables, the chain is hooked in first,
+the comments of the file are not read as ports, and an empty list takes the
+rules away.
 
 ### What was verified here
 

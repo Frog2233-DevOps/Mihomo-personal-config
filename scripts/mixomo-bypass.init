@@ -1,0 +1,30 @@
+#!/bin/sh /etc/rc.common
+# =============================================================================
+#  mixomo-bypass - keep the traffic of the listed ports out of the core
+# =============================================================================
+#  The ports are in /etc/mihomo/bypass-ports.txt, one per line.
+#
+#  The order matters: MagiTrickle has to be up before the rule is hooked
+#  into PREROUTING, because the rule has to stand in front of the chains
+#  of MagiTrickle. MagiTrickle restores the position of its own chains
+#  after a restart (it remembers the rules around them), so the rule stays
+#  in front of them.
+# =============================================================================
+START=99
+STOP=10
+
+start() {
+	[ -x /etc/init.d/magitrickle ] && /etc/init.d/magitrickle start >/dev/null 2>&1
+	[ -x /etc/mihomo/scripts/bypass-ports.sh ] || return 0
+	sh /etc/mihomo/scripts/bypass-ports.sh install
+}
+
+stop() {
+	[ -x /etc/mihomo/scripts/bypass-ports.sh ] || return 0
+	sh /etc/mihomo/scripts/bypass-ports.sh uninstall
+}
+
+reload() {
+	stop
+	start
+}

@@ -137,6 +137,7 @@ Lite-вариант существует потому, что список ре�
 | `scripts/setup-mixomo.sh` | ставит схему на роутер |
 | `scripts/gen-mtrickle.sh` | пишет состояние MagiTrickle по rule-set'ам |
 | `scripts/update-mixomo.sh` | ежедневное обновление rule-set'ов |
+| `scripts/bypass-ports.sh`, `scripts/mixomo-bypass.init` | держат трафик перечисленных портов в обход ядра (например, Rust-сервер с большим UDP) |
 
 ```sh
 curl -fsSL https://github.com/Internet-Helper/mixomo-openwrt/raw/main/install.sh | sh
@@ -144,6 +145,9 @@ curl -fsSL -o /tmp/setup-mixomo.sh \
   https://raw.githubusercontent.com/Frog2233-DevOps/Mihomo-personal-config/main/scripts/setup-mixomo.sh
 SUB_URL='...' DASHBOARD_PASSWORD='...' sh /tmp/setup-mixomo.sh
 ```
+
+Трафик портов из `/etc/mihomo/bypass-ports.txt` в ядро не попадает вообще -
+он идёт напрямую провайдеру. Это то, что нужно Rust-серверу с большим UDP.
 
 Подробности схемы, списков и проверок - в `docs/MIXOMO-RU.md`.
 

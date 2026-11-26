@@ -176,6 +176,63 @@ web interface if you want them through the proxy.
 does not reach the core at all, so no rule of the core can change it. When
 you want a service through the proxy, put it into a list.
 
+## The ports that bypass the core
+
+Some traffic must not touch the core **at all**. A Rust server that sends a
+lot of UDP is the example from the field: the UDP pipeline of the core is
+the bottleneck, and the packets of the game server get lost on the way -
+the connection times out.
+
+In this scheme the traffic of the clients reaches the core only when
+MagiTrickle marked its address. The traffic of a port that is on the list
+below never gets there at all:
+
+```shell
+vi /etc/mihomo/bypass-ports.txt     # one port per line
+/etc/init.d/mixomo-bypass restart
+```
+
+The file is yours - the installer never overwrites it. The installer also
+takes the ports from the command line:
+
+```shell
+BYPASS_PORTS='25565 28015' sh /tmp/setup-mixomo.sh
+```
+
+### How it works
+
+`scripts/bypass-ports.sh` builds a chain of its own and hooks it into
+`PREROUTING` of the `mangle` and the `nat` table, in the first position -
+in front of the chains of MagiTrickle:
+
+```
+-A MIXOMO_BYPASS ! -i lo -p udp --dport 25565 -m comment --comment mixomo-bypass -j ACCEPT
+-I PREROUTING 1 -j MIXOMO_BYPASS
+```
+
+Two details are not decoration:
+
+* **ACCEPT and not RETURN.** A `RETURN` from a chain of the mangle table
+  only means "back to PREROUTING and keep looking" - a packet that
+  MagiTrickle marked would stay marked and would still go into the core.
+  `ACCEPT` ends the traversal of the table, the packet keeps its normal
+  route to the provider.
+* **The first position.** The chains of MagiTrickle are inserted into
+  `PREROUTING` as well. A rule of ours that stands in front of them stays
+  in front of them: MagiTrickle restores the position of its own chains
+  after a restart by the rules around them (the "anchors"), so our jump is
+  part of that anchor.
+
+The init script `/etc/init.d/mixomo-bypass` starts MagiTrickle first and
+hooks the rule in afterwards, and it is enabled at the installation.
+
+### What it does not do
+
+The traffic of these ports is not seen by the core, so it is also not
+seen by the rules of the core: it is not proxied, not filtered and not
+blocked by the RKN list. That is the point - the port is for a server that
+has to be reached directly.
+
 ## Checks
 
 ```shell
