@@ -57,6 +57,10 @@ BASE_URL="${BASE_URL:-}"
 STOP_OPENCLASH="${STOP_OPENCLASH:-1}"
 INSTALL_MIXOMO="${INSTALL_MIXOMO:-0}"
 MAGITRICKLE="${MAGITRICKLE:-original}"
+# The ports that must not touch the core, separated by spaces or commas
+# (for example: "25565 28015"). They are written into
+# /etc/mihomo/bypass-ports.txt, which belongs to the user afterwards.
+BYPASS_PORTS="${BYPASS_PORTS:-}"
 ENABLE_CRON="${ENABLE_CRON:-1}"
 CHECKS="${CHECKS:-1}"
 
@@ -139,10 +143,12 @@ mkdir -p "$TMP/ruleset" "$TMP/scripts"
 log "downloading the scheme from $REPO@$BRANCH"
 fetch "RU-Mihomo-mixomo.yaml" "$TMP/config.yaml" || fail "cannot download RU-Mihomo-mixomo.yaml"
 fetch "magitrickle/magitrickle.yaml" "$TMP/magitrickle.yaml" || fail "cannot download magitrickle/magitrickle.yaml"
-for s in build-ruleset.sh gen-mtrickle.sh update-mixomo.sh apply-rulesets.sh check-groups.sh; do
+for s in build-ruleset.sh gen-mtrickle.sh update-mixomo.sh apply-rulesets.sh check-groups.sh bypass-ports.sh; do
   fetch "scripts/$s" "$TMP/scripts/$s" || fail "cannot download scripts/$s"
 done
+fetch "scripts/mixomo-bypass.init" "$TMP/scripts/mixomo-bypass.init" || fail "cannot download scripts/mixomo-bypass.init"
 fetch "lists/custom-domains.list" "$TMP/custom-domains.list" || fail "cannot download the custom list"
+fetch "lists/bypass-ports.list" "$TMP/bypass-ports.list" || fail "cannot download the bypass list"
 
 for r in $RULESETS; do
   fetch "ruleset/$r.mrs" "$TMP/ruleset/$r.mrs" || fail "cannot download ruleset/$r.mrs"
@@ -180,10 +186,29 @@ fi
 cp "$TMP/config.yaml" "$MIHOMO_DIR/config.yaml" || fail "cannot install the config"
 log "config installed: $MIHOMO_DIR/config.yaml"
 
-for s in build-ruleset.sh gen-mtrickle.sh update-mixomo.sh apply-rulesets.sh check-groups.sh; do
+for s in build-ruleset.sh gen-mtrickle.sh update-mixomo.sh apply-rulesets.sh check-groups.sh bypass-ports.sh; do
   cp "$TMP/scripts/$s" "$MIHOMO_DIR/scripts/$s" || fail "cannot install scripts/$s"
   chmod +x "$MIHOMO_DIR/scripts/$s" || fail "cannot chmod scripts/$s"
 done
+
+# The init script that keeps the bypass rule in front of the chains of
+# MagiTrickle.
+cp "$TMP/scripts/mixomo-bypass.init" /etc/init.d/mixomo-bypass || fail "cannot install the init script"
+chmod +x /etc/init.d/mixomo-bypass || fail "cannot chmod the init script"
+if [ -x /etc/init.d/mixomo-bypass ]; then
+  /etc/init.d/mixomo-bypass enable >/dev/null 2>&1 || true
+fi
+
+# The list of the ports belongs to the user: never overwrite it.
+if [ ! -f "$MIHOMO_DIR/bypass-ports.txt" ]; then
+  if [ -n "$BYPASS_PORTS" ]; then
+    printf '%s\n' "$BYPASS_PORTS" | tr ', ' '\n' | grep -E '^[0-9]{1,5}$' >"$MIHOMO_DIR/bypass-ports.txt" || true
+  else
+    cp "$TMP/bypass-ports.list" "$MIHOMO_DIR/bypass-ports.txt" || fail "cannot install the bypass list"
+  fi
+else
+  log "keeping the existing $MIHOMO_DIR/bypass-ports.txt"
+fi
 
 # The custom list belongs to the user: never overwrite it on a reinstall.
 if [ ! -f "$MIHOMO_DIR/lists/custom-domains.list" ]; then
@@ -240,6 +265,12 @@ if [ -x /etc/init.d/mixomo-routing ]; then
 fi
 sleep 3
 
+# The bypass rule has to stand in front of the chains of MagiTrickle, so it
+# is hooked in after the services are up.
+if [ -x /etc/init.d/mixomo-bypass ]; then
+  /etc/init.d/mixomo-bypass start >/dev/null 2>&1 || true
+fi
+
 # --- checks -------------------------------------------------------------------
 failures=0
 check() { # check <description> <command...>
@@ -295,6 +326,14 @@ if ip link show Mihomo >/dev/null 2>&1; then
 else
   printf '  FAIL the tunnel device Mihomo is missing (hev-socks5-tunnel is not running)\n'
   failures=$((failures + 1))
+fi
+
+if [ -x /etc/init.d/mixomo-bypass ] && sh "$MIHOMO_DIR/scripts/bypass-ports.sh" status 2>/dev/null | grep -q 'the chain MIXOMO_BYPASS is at position 1'; then
+  printf '  OK   the ports bypass the core\n'
+elif [ -x /etc/init.d/mixomo-bypass ] && [ ! -s "$MIHOMO_DIR/bypass-ports.txt" ]; then
+  printf '  SKIP no ports to bypass (bypass-ports.txt is empty)\n'
+else
+  printf '  WARN the bypass rule is not in place\n'
 fi
 
 if command -v ipset >/dev/null 2>&1 && ipset list -n 2>/dev/null | grep -q '^mt_'; then

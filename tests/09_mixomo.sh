@@ -206,13 +206,28 @@ else
 fi
 
 section "8. the scripts are POSIX sh and pass the syntax check"
-for s in scripts/gen-mtrickle.sh scripts/setup-mixomo.sh scripts/update-mixomo.sh; do
+for s in scripts/gen-mtrickle.sh scripts/setup-mixomo.sh scripts/update-mixomo.sh scripts/bypass-ports.sh; do
   if sh -n "$s" 2>/dev/null; then ok "$s passes sh -n"; else bad "$s has a syntax error"; fi
   # "[[" is bash. The character class "[[:space:]]" of sed is not - the
   # difference is the colon right after the brackets.
   if grep -qE '\[\[[^:]|source |<<<' "$s"; then bad "$s uses bash syntax"; else ok "$s has no bash syntax"; fi
   if grep -q '^#!' "$s"; then ok "$s has a shebang"; else bad "$s has no shebang"; fi
 done
+
+section "8a. the ports that bypass the core"
+has scripts/bypass-ports.sh "MIXOMO_BYPASS"
+has scripts/bypass-ports.sh "PREROUTING"
+has scripts/bypass-ports.sh "--dport"
+# ACCEPT and not RETURN: RETURN from a chain of the mangle table only means
+# "back to PREROUTING", so a packet that MagiTrickle marked would stay
+# marked. ACCEPT ends the traversal of the table.
+if grep -q 'j ACCEPT' scripts/bypass-ports.sh; then ok "the bypass rule accepts the packets"; else bad "the bypass rule does not accept"; fi
+if grep -q 'j RETURN' scripts/bypass-ports.sh; then bad "the bypass rule returns instead of accepting"; else ok "the bypass rule does not use RETURN"; fi
+has scripts/mixomo-bypass.init "bypass-ports.sh"
+has scripts/mixomo-bypass.init "magitrickle"
+has lists/bypass-ports.list "25565"
+has scripts/setup-mixomo.sh "BYPASS_PORTS"
+has scripts/setup-mixomo.sh "mixomo-bypass"
 
 section "9. setup-mixomo.sh does the whole job"
 has scripts/setup-mixomo.sh "RU-Mihomo-mixomo.yaml"

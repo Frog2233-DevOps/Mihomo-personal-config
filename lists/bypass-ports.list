@@ -1,0 +1,21 @@
+# =============================================================================
+#  bypass-ports.list - the ports that must not touch the core
+# =============================================================================
+#  One port per line. Lines starting with "#" and empty lines are ignored.
+#
+#  Why: some traffic must not go through the core at all. A Rust server that
+#  sends a lot of UDP is the example: the UDP pipeline of the core is the
+#  bottleneck, and the packets of the game server get lost on the way. The
+#  traffic of these ports leaves the router straight to the provider.
+#
+#  The file belongs to the user: the installer never overwrites it.
+#
+#  Example:
+#
+#      # the Rust servers
+#      25565
+#      28015
+# =============================================================================
+
+# port one per line, for example:
+# 25565
