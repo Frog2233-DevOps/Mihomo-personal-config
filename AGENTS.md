@@ -188,9 +188,14 @@ These are not style preferences, each of them has a reason that was measured.
 26. **The IPv6 of the tunnel device is a local thing.** The device `Mihomo`
     is created by hev-socks5-tunnel and inherits
     `net.ipv6.conf.default.disable_ipv6`, so on a router with IPv6 switched
-    off it comes up with IPv6 disabled and MagiTrickle dies at once:
-    `failed to link ipset to interface: error adding iface route:
-    permission denied`. The fix enables IPv6 on **this one device** (never
+    off it comes up with IPv6 disabled. The original report for this router
+    was a death at once: `failed to link ipset to interface: error adding
+    iface route: permission denied`. **That death was NOT reproduced with
+    the Mod build** (daemon 0.5.2-badigit.18): the daemon writes `no
+    addresses on interface for current IP family, skipping route family=10
+    iface=Mihomo` and keeps working (measured: alive, 11.8 MB of RSS). Which
+    build dies is not checked here - do not write the death down as a fact
+    of the scheme. The fix enables IPv6 on **this one device** (never
     globally, never on `br-lan`) and starts MagiTrickle again - see
     `scripts/mixomo-ipv6.sh` and `scripts/mixomo-ipv6.init`. The device is
     created again at every start of the tunnel, so the state is checked
@@ -219,6 +224,14 @@ These are not style preferences, each of them has a reason that was measured.
     core) comes from a measurement on a named router with a named build, and
     the router and the build are named next to it. Values that could not be
     reproduced are marked as such.
+30. **A switched-off subscription must not be able to kill the router.** The
+    daemon downloads the list of a subscription when an update is asked for in
+    the web interface - **even when the subscription is switched off**
+    (measured on the router: the update of the list of 81 460 domains took the
+    daemon and the core with it). So the URL of a switched-off list points to
+    nothing (`http://127.0.0.1:1/switched-off.lst`), the update fails at
+    once, and the original URL stays in the comment of the state file next to
+    the reason why the list is off.
 
 ## The DNS scheme
 

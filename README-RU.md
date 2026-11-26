@@ -167,9 +167,12 @@ API отвечать с `Access-Control-Allow-Origin: *` - любая стран
 | `scripts/apply-rulesets.sh` | работает на роутере: говорит работающему ядру перечитать конфиг через его же API, без перезапуска |
 | `scripts/check-groups.sh` | работает на роутере: что попало в каждую группу |
 | `scripts/bypass-ports.sh`, `scripts/mixomo-bypass.init` | держат трафик перечисленных портов вне ядра |
+| `scripts/mixomo-ram.sh` | работает на роутере: отчёт по памяти - RAM роутера, RSS ядра и демона, сообщения oom-killer'а |
+| `scripts/mixomo-memlimit.sh` | задаёт мягкий предел памяти (`GOMEMLIMIT`) ядру и демону MagiTrickle |
 | `scripts/selftest.sh`, `scripts/selftest.py` | `mihomo -t`, проверки конфига и `shellcheck` для скриптов роутера |
 | `tests/run-all.sh` | полный регрессионный набор схемы |
 | `docs/MIXOMO.md`, `docs/MIXOMO-RU.md` | схема, установка, замеры, troubleshooting |
+| `docs/UPSTREAM-ISSUES.md` | тексты issues для апстрим-проектов (MagiTrickle), готовые к отправке |
 | `AGENTS.md` | правила, которые нельзя ломать, для ИИ-моделей и для людей |
 
 Раскладка OpenClash (конфиг для схемы «всё через ядро») лежит в ветке
@@ -177,14 +180,27 @@ API отвечать с `Access-Control-Allow-Origin: *` - любая стран
 
 ## Цифры
 
-Измерено на роутере (Cudy WR3000S v1, 239 МБ RAM, mihomo v1.19.34):
+Измерено на роутере (Cudy WR3000S v1, 239 МБ RAM, mihomo v1.19.34,
+MagiTrickle 0.8.2-r1, демон 0.5.2-badigit.18):
 
 | | |
 |---|---|
 | RAM, ядро с конфигом схемы | 60.7 МБ RSS (среднее трёх прогонов) |
 | RAM, ядро с «lite»-вариантом | 60.8 МБ RSS - экономии нет, вариант удалён |
 | RAM, rule-set'ы на флеше | 1.7 МБ в 28 файлах |
+| RAM, демон MagiTrickle (только приложение) | 14.8 МБ RSS |
+| RAM, демон с 1 000 доменов | 27.0 МБ RSS |
+| RAM, демон с 5 000 доменов | 77.4 МБ RSS |
+| RAM, демон с 5 000 доменов и `GOMEMLIMIT=64MiB` | 64.0 МБ RSS |
+| RAM, демон с 10 000 доменов | убит oom-killer'ом |
+| RAM на каждый домен списка | около 13 КБ |
 | Rule-set'ы пересобираются | ежедневно, workflow `rulesets.yml` |
+
+Списки схемы не помещаются в роутер с 256 МБ RAM: демон держит каждый
+домен каждого списка в своей памяти, и oom-killer забирает его, когда
+списки не влезают. `scripts/gen-mtrickle.sh` меряет размер списков перед
+записью состояния и выключает каждый список, который не влезает в
+`MAX_DOMAINS` (по умолчанию 5 000).
 
 Цифры по демону, по oom-killer'у и замеры списков - в
 [docs/MIXOMO-RU.md](docs/MIXOMO-RU.md).
