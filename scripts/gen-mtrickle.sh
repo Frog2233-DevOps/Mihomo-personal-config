@@ -24,6 +24,13 @@
 #      TEMPLATE      the template with the subscriptions
 #      OUT           the state file
 #
+#  The IPv6 of MagiTrickle is decided by the router:
+#      IPV6              auto (default) | 1 | 0
+#                        auto: MagiTrickle manages IPv6 only when the router
+#                        has IPv6 switched on. On a router with IPv6 off the
+#                        daemon tries to add an IPv6 route to the tunnel
+#                        device and dies (see scripts/mixomo-ipv6.sh).
+#
 #  POSIX sh (busybox ash on the router), no bash, no python, no jq.
 # =============================================================================
 set -eu
@@ -36,6 +43,9 @@ OUT="${2:-${OUT:-/etc/magitrickle/state/config.yaml}}"
 MIHOMO="${MIHOMO:-/usr/bin/mihomo}"
 RULE_DIR="${RULE_DIR:-/etc/mihomo/rule-files}"
 CUSTOM_LIST="${CUSTOM_LIST:-/etc/mihomo/lists/custom-domains.list}"
+
+# The IPv6 of the daemon.
+IPV6="${IPV6:-auto}"
 
 log()  { printf '%s\n' "$*"; }
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -114,6 +124,23 @@ group() {
   fi
 }
 
+# --- the IPv6 of MagiTrickle --------------------------------------------------
+# On a router with IPv6 switched off the daemon has nothing to do with IPv6:
+# it would try to add an IPv6 route to the tunnel device and die (the kernel
+# refuses it with -EACCES). The daemon is told not to touch IPv6 at all.
+ipv6_state() { # ipv6_state -> true | false
+  case "$IPV6" in
+    1|true)  printf 'false'; return 0 ;;
+    0|false) printf 'true'; return 0 ;;
+  esac
+  if [ -r /proc/sys/net/ipv6/conf/all/disable_ipv6 ]; then
+    v=$(tr -d ' \t\r\n' </proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null || echo 0)
+    [ "$v" = "1" ] && printf 'true' || printf 'false'
+    return 0
+  fi
+  printf 'false'
+}
+
 # --- build the lists ---------------------------------------------------------
 log "building the lists of the local groups"
 
@@ -147,6 +174,12 @@ fi
 awk '/^groups:[[:space:]]*$/{exit} {print}' "$TEMPLATE" >"$WORK/head.yaml"
 awk '/^subscriptions:[[:space:]]*$/{p=1} p' "$TEMPLATE" >"$WORK/subs.yaml"
 
+# The IPv6 of the daemon is decided by the router.
+DISABLE_IPV6=$(ipv6_state)
+sed -e "s/^\([[:space:]]*\)disableIPv6:.*/\1disableIPv6: $DISABLE_IPV6/" \
+  "$WORK/head.yaml" >"$WORK/head2.yaml"
+mv "$WORK/head2.yaml" "$WORK/head.yaml"
+
 {
   cat "$WORK/head.yaml"
   printf '\ngroups:\n'
@@ -173,6 +206,7 @@ cp "$WORK/state.yaml" "$OUT" || fail "cannot write $OUT"
 chmod 600 "$OUT" 2>/dev/null || true
 
 log "state configuration written: $OUT ($(wc -c <"$OUT" | tr -d ' ') bytes)"
+log "IPv6 of MagiTrickle: disabled=$DISABLE_IPV6"
 
 # --- the same groups in the format of the web interface ------------------------
 # The interface exports its groups as JSON with the extension ".mtrickle" and

@@ -185,6 +185,23 @@ These are not style preferences, each of them has a reason that was measured.
     the repository - copied flat into `/etc/mihomo/` the root becomes `/etc`
     and the build fails with `/etc/lists/custom-domains.list not found`.
 
+26. **The IPv6 of the tunnel device is a local thing.** The device `Mihomo`
+    is created by hev-socks5-tunnel and inherits
+    `net.ipv6.conf.default.disable_ipv6`, so on a router with IPv6 switched
+    off it comes up with IPv6 disabled and MagiTrickle dies at once:
+    `failed to link ipset to interface: error adding iface route:
+    permission denied`. The fix enables IPv6 on **this one device** (never
+    globally, never on `br-lan`) and starts MagiTrickle again - see
+    `scripts/mixomo-ipv6.sh` and `scripts/mixomo-ipv6.init`. The device is
+    created again at every start of the tunnel, so the state is checked
+    and repaired, not set once. `FIX_IPV6=0` in `/etc/mihomo/mixomo.conf`
+    switches the fix off. Do not enable IPv6 on the whole router to make
+    this problem go away: the scheme does not use IPv6.
+27. **The state of MagiTrickle must match the router.** `disableIPv6` in
+    the state file is written by `scripts/gen-mtrickle.sh` from the value
+    `IPV6` (`auto` by default: only when the router has IPv6). The router
+    knows better than the template what it can do.
+
 ## The DNS scheme
 
 * DoH by IP (`1.1.1.1`, `9.9.9.9`) - a hostname needs a resolver in the

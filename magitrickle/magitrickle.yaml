@@ -83,6 +83,10 @@ app:
     ipset:
       tablePrefix: mt_
     disableIPv4: false
+    # The IPv6 of the daemon is decided by the router: on a router with IPv6
+    # switched off the daemon would try to add an IPv6 route to the tunnel
+    # device and die. scripts/gen-mtrickle.sh writes the value that fits the
+    # router (IPV6=auto).
     disableIPv6: false
     # The first mark and routing table MagiTrickle may use. The same value
     # is in mixomo (MIXOMO_REDIR_DEFAULT_MARK) - the two must not collide.
