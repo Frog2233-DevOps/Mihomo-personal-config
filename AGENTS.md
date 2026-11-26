@@ -1,68 +1,89 @@
 # AGENTS.md
 
 Context for an AI model (or a human) working on this repository. Everything
-here was measured on a real router; if you change something, measure it
-again and update this file.
+here was measured on a real router; if you change something, measure it again
+and update this file.
 
 ## What this repository is
 
-A mihomo configuration for OpenClash on a router in Russia. The config
-routes Russian traffic directly, blocked and foreign traffic through the
-proxy, and everything else by rule-sets.
+The configuration of the core for the **mixomo** scheme on a router in Russia.
+Only the traffic that MagiTrickle marked goes into the core, everything else
+goes straight to the provider.
 
-Target: Cudy WR3000S v1 (MT7981BA, 256 MB RAM, 128 MB NAND), OpenWrt
-25.12.x, OpenClash v0.48.002, mihomo v1.19.33.
-
-## The file that is the source of truth
-
-`RU-Mihomo.yaml` is the only file that is edited by hand.
-
-`RU-Mihomo-lite.yaml` and `RU-Mihomo-smart.yaml` are **generated**:
-
-```sh
-./scripts/make-lite.sh     # -> RU-Mihomo-lite.yaml   (no ad list)
-./scripts/make-smart.sh    # -> RU-Mihomo-smart.yaml  (type: smart)
+```
+client -> MagiTrickle (DNS, marks the addresses of its lists)
+       -> hev-socks5-tunnel (tun "Mihomo")
+       -> mihomo (mixed-port 7890) -> the node
 ```
 
-Never edit the generated files by hand - the next generation overwrites it.
+Target: Cudy WR3000S v1 (MT7981BA, 239 MB RAM + 131 MB swap), OpenWrt
+25.12.6, mixomo v0.3.4, MagiTrickle 0.8.2, hev-socks5-tunnel 2.20.0, mihomo
+v1.19.34.
+
+The layout that sends *everything* through the core (OpenClash) is not in
+`main` any more - it is in the branch `legacy/openclash`. Do not merge it
+back: the two layouts are different schemes, not two variants of one.
+
+## The files that are edited by hand
+
+| File | What it is |
+|---|---|
+| `RU-Mihomo-mixomo.yaml` | the config of the core - the only config file of the scheme |
+| `magitrickle/magitrickle.yaml` | the template of the state of MagiTrickle: the groups and the subscriptions |
+| `magitrickle/magitrickle.mtrickle` | the same groups in the JSON format of the web interface |
+| `lists/custom-domains.list` | your own domains |
+| `lists/bypass-ports.list` | the ports that must not touch the core |
+
+Everything else is generated:
+
+* `ruleset/*.mrs` - built by `scripts/build-ruleset.sh`, never by hand (they
+  are binary files).
+* `/etc/magitrickle/state/config.yaml` - the state of the service, built by
+  `scripts/gen-mtrickle.sh` from the template and from the rule-sets.
+
+There is no "lite" and no "smart" variant any more. The lite variant was
+measured on the router and removed: the core with the full config keeps
+**60.7 MB** of RSS, with the lite one **60.8 MB** (three runs each) - there is
+no saving, so the variant was not worth the extra file.
 
 ## Before you commit
 
 ```sh
-./scripts/selftest.sh
+bash scripts/selftest.sh
 bash tests/run-all.sh
 ```
 
-`selftest.sh` runs `mihomo -t` on all three configs and checks the filters,
-the groups, the rule targets and the rule-set files. `tests/run-all.sh` adds
-regression tests for the normalizer, the deploy flags, the busybox build,
-the API checks, the docs and the workflows. A pull request that does not
-pass both will not be merged.
+`selftest.sh` runs `mihomo -t` on the config of the scheme, checks that every
+script of the router is POSIX `sh` and is happy with `shellcheck`, and runs the
+consistency checks of `selftest.py` (the groups, the rule targets, the
+rule-set files, the settings that the scheme forces, the order of the rules,
+the state of MagiTrickle). `tests/run-all.sh` adds the tests of the scheme
+itself: the config, the groups, the state file, the rehearsal of the
+installation.
 
-With a real router (or the WR3000S QEMU emulator from 4pda topic 1087457,
-post #10376) the full cycle can be checked as well:
+A pull request that does not pass both will not be merged.
 
-```sh
-ROUTER_HOST=192.168.1.1 ROUTER_PORT=22 SECRET=<dashboard-password> \
-  bash tests/04_cycle.sh
-```
+With a real router the full cycle can be checked as well - the rehearsal of
+the installation is `tests/10_mixomo_rehearsal.sh` (it needs root, it writes
+into a directory of its own and it replaces the services with fakes).
 
-CI runs `tests/run-all.sh` on every pull request.
+CI runs both on every pull request (`.github/workflows/validate.yml`).
 
 ## Rules that must not be broken
 
 These are not style preferences, each of them has a reason that was measured.
 
-1. **The filters live on the groups, never on the provider.** OpenClash
-   rewrites `filter` and `exclude-filter` of every `proxy-provider` from its
-   own UI and would silently disable the logic.
+1. **The filters live on the groups, never on the provider.** A provider-level
+   filter hits every group that uses the provider, and the groups need
+   different filters: the automatic groups exclude the Russian nodes, the
+   manual group keeps them.
 2. **`nameserver-policy` uses `'rule-set:ru-domains'`, never
    `geosite:category-ru`.** With the geosite variant the core downloads
    `GeoSite.dat` (4.3 MB) and keeps the geosite matcher in RAM: 86 MB RSS
    instead of 52 MB, and a start time of 4.6 s instead of 67 ms.
-3. **`geo-auto-update: false`** and `ENABLE_GEOIP_DAT = 0` in
-   `RU-Mihomo.conf`. `GeoIP.dat` is 16.5 MB and `GeoSite.dat` is 4.4 MB -
-   21 MB of a 84.8 MB overlay that this config never reads.
+3. **`geo-auto-update: false`** and no `GeoIP.dat` / `GeoSite.dat` in the
+   layout of the scheme. They are 16.5 + 4.4 MB that this config never
+   reads.
 4. **No `behavior: classical` with `format: mrs`.** Such a rule matches
    nothing and fails silently.
 5. **No `\p{IsCyrillic}`.** It crashes mihomo v1.19.33 with a panic in the
@@ -72,96 +93,145 @@ These are not style preferences, each of them has a reason that was measured.
    otherwise their groups would be unreachable), the RKN list comes before
    the Russian domains (domains like `007dom.ru` would go DIRECT and around
    the block), and `custom-domains` comes above everything that comes from a
-   list.
-7. **`DASHBOARD_PASSWORD` must not be empty.** With an empty secret the
-   API answers with `Access-Control-Allow-Origin: *` - any web page in the
-   LAN can drive the proxy. OpenClash overwrites the `secret` in the YAML
-   with the value from this option.
+   list. The rule of `games` stands above the RKN list: 121 of its domains
+   are on the RKN list and 51 on the Roblox list.
+7. **`DASHBOARD_PASSWORD` must not be empty.** With an empty secret the API
+   answers with `Access-Control-Allow-Origin: *` - any web page in the LAN
+   can drive the proxy. `scripts/setup-mixomo.sh` refuses an empty value and
+   never prints it.
 8. **No `external-ui-url`.** The core downloads that zip without checking
-   the integrity. OpenClash ships its own dashboard.
-9. **Do not add a top level `proxies:` block.** OpenClash deletes the
-   entries of the group lists when a node filter is set in its UI, and the
-   group lists of this config share one array through a YAML anchor.
-10. **The proxy groups must not be created in the OpenClash UI.** OpenClash
-    rebuilds the whole `proxy-groups:` block from its own storage and would
-    overwrite the design of this config.
-11. **Plain aliases only, no `<<:` merge keys.** Both work, but a plain
-    alias is also readable for tools that do not implement merge keys.
-12. **The domain normalizer must accept hyphens.** `scripts/build-ruleset.sh`
-    uses `^[A-Za-z0-9_.-]+$` for a bare domain. Removing `-` silently drops
-    valid entries (`01-klinika-21.ru`, `xn--...`): measured 20 833 of 82 146
-    lines lost from the RKN list on 2026-11-23.
-13. **`deploy.sh` must use `-P` for scp and `-p` for ssh.** scp reads `-p` as
-    "preserve times", so a custom `ROUTER_PORT` used to be treated as a local
-    filename. The legacy `-O` flag is tried first because dropbear has no
-    SFTP server; do not remove the fallback.
-14. **Count bytes with `wc -c`, never GNU `stat -c%s`.** The router's busybox
-    `stat` prints 0 for every file, so the build summary lied about its size.
-15. **`check-groups.sh` must validate the API answer.** A 401 body is not an
-    empty answer: without a `"proxies"` check every group was printed as
-    `NOT FOUND` and the warnings reported a false `OK`. The `uclient-fetch`
-    fallback must pass `--header="Authorization: Bearer ..."`.
-16. **`scripts/install.sh` is the one-command installer and must stay POSIX.**
-    Download everything into a temp directory first, then install, so a failed
-    download changes nothing; never print `SUB_URL` or `DASHBOARD_PASSWORD`;
-    keep the user's `lists/custom-domains.list` on a reinstall; back up a
-    changed config as `.bak`. Its embedded `RULESETS` list must match
-    `ruleset/` exactly - `tests/07_install.sh` checks it, as well as the
-    placeholder escaping, all three variants and the atomic failure path.
-17. **The router must refresh the lists on its own.** The daily GitHub rebuild
-    only commits files to the repository - without router secrets it never
-    reaches the device. `scripts/install.sh` therefore adds the
-    `update-rulesets.sh` line to root's crontab for the default
-    `/etc/openclash`, preserving other entries and avoiding duplicates;
-    `ENABLE_CRON=0` opts out. `tests/07_install.sh` verifies the cron line.
-
-19. **A process search must not find the script itself.** `apply-rulesets.sh`
-    looks for the config of the running core. The first command line that
-    contains "clash" or "mihomo" is not necessarily the core: on the router
-    the script's own path is `/etc/openclash/scripts/apply-rulesets.sh`. Take
-    the first line that contains `-f ` **and** whose file exists.
-20. **The scripts on the router must not depend on one downloader.** OpenClash
-    installs `curl`, but a plain OpenWrt has only `uclient-fetch` and `wget`.
-    Choose the downloader at runtime; the daily cron runs unattended.
-21. **The router cycle has a local rehearsal.** `tests/08_rehearsal.sh` runs
-    `install.sh`, the ruby rewrite of OpenClash, the core, `check-groups.sh`,
-    `update-rulesets.sh` and the apply through the API - in the layout of the
-    router, on a real core. It found two bugs that the other suites missed.
-    Run it after every change to the scripts that run on the router.
-22. **The mixomo layout is a second layout, not a variant of the first.**
-    `RU-Mihomo-mixomo.yaml` belongs to the scheme of mixomo-openwrt, where
-    only the traffic that MagiTrickle marked goes into the core. Its
-    settings are forced by that scheme and must not be "improved":
-    `mixed-port` has to be 7890 (the installer of mixomo keeps a config only
-    with that port), `enhanced-mode` has to be `redir-host` (with fake-ip the
-    client sends **all** of its traffic to 198.18.0.0/16, and only the marked
-    addresses reach the core - the rest would leave the router towards a fake
-    address), and the rule-sets belong in `./rule-files/`. The ad list is
-    deliberately **not** in the core of that layout: MagiTrickle drops it with
-    the interface `blackhole`, which keeps 110 000 domains out of the RAM of
-    the core.
-23. **The state of MagiTrickle has to work with both builds.** The original
+   the integrity.
+9. **The settings of the scheme must not be "improved".** `mixed-port` has to
+   be 7890 (the installer of mixomo keeps a config only with that port),
+   `enhanced-mode` has to be `redir-host` (with fake-ip the client sends
+   **all** of its traffic to 198.18.0.0/16, and only the marked addresses
+   reach the core - the rest would leave the router towards a fake address),
+   the rule-sets belong in `./rule-files/` and the providers in
+   `./proxy-providers/`.
+10. **The ad list is deliberately not in the core.** MagiTrickle drops it with
+    the interface `blackhole`, which keeps ~110 000 domains out of the RAM of
+    the core and out of its rule matching.
+11. **The state of MagiTrickle has to work with both builds.** The original
     build and the mod build read `dnsProxy.timeout` and
     `netfilter.ipset.additionalTTL` differently (a duration against a number
     of seconds). Do not set these fields: use the default of the build. The
     `configVersion` has to start with `0.1.` - the mod build rejects
     anything else, the original build accepts everything that starts with
     `0.`.
-24. **A service that is not on a list of MagiTrickle never reaches the
-    core.** In the mixomo layout the rules of the core only decide what
-    happens to the traffic that was selected. When a service has to go
-    through the proxy, it needs a list in MagiTrickle - a rule in
-    `RU-Mihomo-mixomo.yaml` alone changes nothing.
-25. **The ports that bypass the core use ACCEPT, not RETURN.** In the
-    mangle table a `RETURN` from a chain only means "back to PREROUTING and
-    keep looking": a packet that MagiTrickle already marked would stay
-    marked and would still go into the core. `ACCEPT` ends the traversal of
-    the table, the packet keeps its normal route. The chain of
+12. **A service that is not on a list of MagiTrickle never reaches the core.**
+    The rules of the core only decide what happens to the traffic that was
+    selected. When a service has to go through the proxy, it needs a list in
+    MagiTrickle - a rule in `RU-Mihomo-mixomo.yaml` alone changes nothing.
+13. **The ports that bypass the core use ACCEPT, not RETURN.** In the mangle
+    table a `RETURN` from a chain only means "back to PREROUTING and keep
+    looking": a packet that MagiTrickle already marked would stay marked and
+    would still go into the core. `ACCEPT` ends the traversal of the table,
+    the packet keeps its normal route. The chain of
     `scripts/bypass-ports.sh` is hooked into `PREROUTING` in the first
-    position, because the chains of MagiTrickle are inserted there too -
-    and MagiTrickle restores the position of its own chains after a
-    restart by the rules around them, so a rule of ours in front of them
-    stays in front of them.
+    position, because the chains of MagiTrickle are inserted there too - and
+    MagiTrickle restores the position of its own chains after a restart by
+    the rules around them, so a rule of ours in front of them stays in front
+    of them.
+14. **Do not put `no-resolve` on the `private` rule.** The `private` rule-set
+    is an IP list; matching a domain against it needs a resolution. With
+    `no-resolve` a local host by name stops matching it and is sent to the
+    proxy instead - measured: `nas.test` -> `192.168.1.10` gives
+    `match RuleSet(private) using DIRECT` without the option and
+    `match Match using PROXY` with it. The option was measured and rejected.
+15. **The domain normalizer must accept hyphens.** `scripts/build-ruleset.sh`
+    uses `^[A-Za-z0-9_.-]+$` for a bare domain. Removing `-` silently drops
+    valid entries (`01-klinika-21.ru`, `xn--...`): measured 20 833 of 82 146
+    lines lost from the RKN list on 2026-11-23.
+16. **The scripts of the router must not depend on one downloader.** A plain
+    OpenWrt has only `uclient-fetch` and `wget`, mixomo installs `curl`.
+    Choose the downloader at runtime; the daily cron runs unattended.
+17. **A process search must not find the script itself.** `apply-rulesets.sh`
+    looks for the config of the running core. The first command line that
+    contains "clash" or "mihomo" is not necessarily the core. Take the first
+    line that contains `-f ` **and** whose file exists.
+18. **`check-groups.sh` must validate the API answer.** A 401 body is not an
+    empty answer: without a `"proxies"` check every group was printed as
+    `NOT FOUND` and the warnings reported a false `OK`. The `uclient-fetch`
+    fallback must pass `--header="Authorization: Bearer ..."`.
+19. **Every script that goes to the router is POSIX `sh`.** The router runs
+    busybox ash, there is no bash there. `scripts/selftest.sh` checks every
+    file of `scripts/` with `sh -n` and with `shellcheck -s sh`.
+20. **The secret and the address of the API are read out of the config of the
+    scheme** (`/etc/mihomo/config.yaml`), because that is the file the core
+    runs with. Keep `apply-rulesets.sh` and `check-groups.sh` POSIX `sh`.
+21. **The router refreshes the lists on its own.** The daily GitHub rebuild
+    only commits files to the repository - without the router secrets it never
+    reaches the device. `scripts/setup-mixomo.sh` therefore adds the
+    `update-mixomo.sh` line (05:30) to the crontab of root, preserving the
+    other entries and avoiding duplicates; `ENABLE_CRON=0` opts out.
+    OpenWrt has no `/etc/cron.d`.
+22. **`ruleset/*.mrs` are never written by hand.** They are binary files that
+    `scripts/build-ruleset.sh` builds and the workflow `rulesets.yml` commits.
+23. **No secrets in the repository.** The subscription URL and the dashboard
+    password are placeholders (`PASTE_SUBSCRIPTION_URL_HERE`, `CHANGE_ME`) and
+    are substituted by `scripts/setup-mixomo.sh`. Neither the URL nor the
+    password may ever be printed into a log, a commit or a document.
+24. **The state of MagiTrickle is generated, the template is not.**
+    `magitrickle/magitrickle.yaml` holds the app section and the
+    subscriptions; `scripts/gen-mtrickle.sh` builds the groups out of the
+    rule-sets and writes `/etc/magitrickle/state/config.yaml`. The groups in
+    the template are the *template*, the local groups (Custom, Streaming, AI,
+    GitHub, Steam) are built from the rule-sets.
+25. **The layout on the router is `/etc/mihomo`.** The config is
+    `/etc/mihomo/config.yaml`, the rule-sets are in `/etc/mihomo/rule-files/`,
+    the scripts in `/etc/mihomo/scripts/`, the lists in `/etc/mihomo/lists/`,
+    the state of MagiTrickle in `/etc/magitrickle/state/config.yaml`. The
+    scripts take the root from their own location, so they keep the layout of
+    the repository - copied flat into `/etc/mihomo/` the root becomes `/etc`
+    and the build fails with `/etc/lists/custom-domains.list not found`.
+
+26. **The IPv6 of the tunnel device is a local thing.** The device `Mihomo`
+    is created by hev-socks5-tunnel and inherits
+    `net.ipv6.conf.default.disable_ipv6`, so on a router with IPv6 switched
+    off it comes up with IPv6 disabled. The original report for this router
+    was a death at once: `failed to link ipset to interface: error adding
+    iface route: permission denied`. **That death was NOT reproduced with
+    the Mod build** (daemon 0.5.2-badigit.18): the daemon writes `no
+    addresses on interface for current IP family, skipping route family=10
+    iface=Mihomo` and keeps working (measured: alive, 11.8 MB of RSS). Which
+    build dies is not checked here - do not write the death down as a fact
+    of the scheme. The fix enables IPv6 on **this one device** (never
+    globally, never on `br-lan`) and starts MagiTrickle again - see
+    `scripts/mixomo-ipv6.sh` and `scripts/mixomo-ipv6.init`. The device is
+    created again at every start of the tunnel, so the state is checked
+    and repaired, not set once. `FIX_IPV6=0` in `/etc/mihomo/mixomo.conf`
+    switches the fix off. Do not enable IPv6 on the whole router to make
+    this problem go away: the scheme does not use IPv6.
+27. **The state of MagiTrickle must match the router.** `disableIPv6` in
+    the state file is written by `scripts/gen-mtrickle.sh` from the value
+    `IPV6` (`auto` by default: only when the router has IPv6). The router
+    knows better than the template what it can do.
+28. **The memory of the router is the limit of the scheme.** The daemon of
+    MagiTrickle keeps every domain of every list in its RAM - about 13 kB for
+    every domain (measured on a router with 239 MB: 1 000 domains - 27 MB of
+    RSS, 5 000 - 79 MB, 10 000 - killed by the oom-killer of the kernel, and
+    the core dies with it). `scripts/gen-mtrickle.sh` counts the domains of
+    the local groups and the lines of the lists (the size is checked with
+    `curl`, the list is not downloaded when `PROBE=0`), and switches off every
+    list that does not fit into `MAX_DOMAINS` (default: 5000). A list that is
+    switched off has to be reported loudly - the traffic of those domains
+    then does not go through the proxy. `scripts/mixomo-memlimit.sh` sets
+    `GOMEMLIMIT` for the core and for the daemon (a soft limit: the garbage
+    collector works harder instead of the kernel killing the process), and
+    `scripts/mixomo-ram.sh` prints the numbers.
+29. **A number in the documentation is a measurement.** Every value that is
+    written down (the memory of the daemon, the size of a list, the RSS of the
+    core) comes from a measurement on a named router with a named build, and
+    the router and the build are named next to it. Values that could not be
+    reproduced are marked as such.
+30. **A switched-off subscription must not be able to kill the router.** The
+    daemon downloads the list of a subscription when an update is asked for in
+    the web interface - **even when the subscription is switched off**
+    (measured on the router: the update of the list of 81 460 domains took the
+    daemon and the core with it). So the URL of a switched-off list points to
+    nothing (`http://127.0.0.1:1/switched-off.lst`), the update fails at
+    once, and the original URL stays in the comment of the state file next to
+    the reason why the list is off.
 
 ## The DNS scheme
 
@@ -180,7 +250,7 @@ Two regexes in the `x-fragments` block:
 * `noise-filter` - LTE/4G servers and the subscription info nodes.
 * `foreign-filter` - `noise-filter` plus the Russian markers.
 
-`scripts/selftest.sh` checks that the noise part of `foreign-filter` is
+`scripts/selftest.py` checks that the noise part of `foreign-filter` is
 still identical to `noise-filter`. If you change one of them, change the
 other as well, or the check will fail.
 
@@ -190,79 +260,61 @@ are still reachable through `🎯 Manual`.
 
 ## Style
 
-* `README.md` and `README-RU.md` describe the same thing in two
-  languages. Keep them in sync when you change the installation steps.
-* The documents come in pairs: `docs/DESIGN.md` and `docs/DESIGN-RU.md`,
-  and the same for `INSTALL`, `GROUPS` and `RULESETS`. Change both.
+* `README.md` and `README-RU.md` describe the same thing in two languages.
+  Keep them in sync when you change the installation steps.
+* The documents come in pairs: `docs/MIXOMO.md` and `docs/MIXOMO-RU.md`.
+  Change both.
 * The file is UTF-8, but everything except the emoji in the group names is
   ASCII. The Russian words in the regexes are written as `\x{...}`.
 * The group names carry an emoji and are quoted: `- name: "🚀 Auto"`.
 * In the rules the group name is **not** quoted - mihomo would take the
   quotes as part of the name: `- RULE-SET,telegram,💬 Telegram`.
 * Comments in the YAML are short. The long explanations live in
-  `docs/DESIGN.md`, and every statement there has a measurement behind it.
-* One subscription, `proxy-providers -> Main`. The URL is a placeholder
-  (`PASTE_SUBSCRIPTION_URL_HERE`); OpenClash substitutes the real one.
+  `docs/MIXOMO.md`, and every statement there has a measurement behind it.
+* One subscription, `proxy-providers -> Main`. The URL is a placeholder.
 * The shell scripts and the lists keep LF line endings (`.gitattributes`).
   A CRLF breaks them on the router.
-
-18. **Do not put `no-resolve` on the `private` rule.** The `private` rule-set
-    is an IP list; matching a domain against it needs a resolution. With
-    `no-resolve` a local host by name stops matching it and is sent to the
-    proxy instead - measured: `nas.test` -> `192.168.1.10` gives
-    `match RuleSet(private) using DIRECT` without the option and
-    `match Match using PROXY` with it. The option was measured and rejected.
+* A test that compares a multi-byte string with `grep` has to set
+  `LC_ALL=C`: the byte comparison is the same on every system, and GNU grep
+  in a UTF-8 locale is not (measured on MSYS: the pattern with an emoji does
+  not match under `LC_ALL=C.UTF-8` and matches under `LC_ALL=C`).
+* A test that needs a program that may be missing (`ruby`, `python3`) has to
+  check it with `command -v` first and **skip**, not fail.
 
 ## The rule-sets on the router
 
 The rule-sets are local files and the router refreshes them itself with
-`scripts/update-rulesets.sh` (its own cron, no secrets needed). The build
+`scripts/update-mixomo.sh` (its own cron, no secrets needed). The build
 script tries the direct link first and then the mirrors - keep that order
-when you add a source: `raw.githubusercontent.com` is not always fast from
-Russia.
+when you add a source.
 
-The scripts take the root of the repository from their own location (the
-folder above `scripts/`), so on the router they keep the layout of the
-repository: `/etc/openclash/scripts/` and `/etc/openclash/lists/` side by
-side, the result in `/etc/openclash/ruleset/`. Copied flat into
-`/etc/openclash/` the root becomes `/etc` and the build fails with
-`/etc/lists/custom-domains.list not found`. `update-rulesets.sh` checks the
-layout before it builds. If you add a file that the build reads from the
-repository, install it on the router in the same relative place and say so in
-`docs/INSTALL.md`.
-
-OpenWrt has no `/etc/cron.d`: the cron job goes into the crontab of root
-(`docs/INSTALL.md`, section 5.1).
+`scripts/update-mixomo.sh` does three things: it rebuilds the rule-sets, it
+rebuilds the state of MagiTrickle and it tells the core to read the new
+files. The reload through the API keeps the connections alive; when it fails
+the core is restarted.
 
 ## Applying the rule-sets
 
-The core reads the rule-sets when it loads the config, so a new list is not in
-use until the core is told to read it again. `scripts/apply-rulesets.sh` does
-that, and it has four modes:
+The core reads the rule-sets when it loads the config, so a new list is not
+in use until the core is told to read it again. `scripts/apply-rulesets.sh`
+does that, and it has four modes:
 
 | `APPLY=` | What happens |
 |---|---|
 | `reload` (default) | `PUT /configs?force=true` on the running core: it reloads its config and reads the new files, the proxy stays up. Measured: the rule count of a provider changes without a restart. |
-| `restart` | `/etc/init.d/openclash restart`. The fallback when the reload fails. |
+| `restart` | `/etc/init.d/mihomo restart`. The fallback when the reload fails. |
 | `none` | Nothing. The lists are used after the next restart. |
 | `check` | Only looks: how many rule-providers the core has and how many rules. |
-
-The secret and the API address are read out of the config the core runs with
-(`/etc/openclash/<name>.yaml`), because that is where OpenClash writes them
-(`yml_change.sh`). Keep `apply-rulesets.sh` POSIX `sh`: it runs on the router,
-where only busybox ash exists.
-
-`scripts/deploy.sh` copies the scripts into `scripts/` on the router (not
-flat into `/etc/openclash/`), strips the carriage returns and applies the
-result. It uses `scp -O` when the local scp knows the flag: OpenSSH 9 copies
-over SFTP by default and the dropbear of OpenWrt has no `sftp-server`.
 
 ## Adding a new service group
 
 1. Add the rule-set to `scripts/build-ruleset.sh` (and to the download list
    of MetaCubeX if it exists there).
-2. Add the `rule-provider` block to `RU-Mihomo.yaml`.
+2. Add the `rule-provider` block to `RU-Mihomo-mixomo.yaml`.
 3. Add the group with the shared choice list (`proxies: *service-choices`).
 4. Add the rule **in the service block**, before the RKN list.
-5. Add the group to `scripts/check-groups.sh` and to `docs/GROUPS.md`.
-6. Run `./scripts/build-ruleset.sh` and `./scripts/selftest.sh`.
+5. Add the group to `scripts/check-groups.sh` (the groups are read out of the
+   config of the scheme, the built-in list is only the fallback).
+6. Add the subscription of the service to `magitrickle/magitrickle.yaml` -
+   without it the traffic of the service never reaches the core.
+7. Run `./scripts/build-ruleset.sh` and `./scripts/selftest.sh`.

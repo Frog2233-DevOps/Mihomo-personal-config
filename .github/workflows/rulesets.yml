@@ -67,11 +67,10 @@ jobs:
           ROUTER_PORT: ${{ secrets.ROUTER_PORT }}
           ROUTER_PATH: ${{ secrets.ROUTER_PATH }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          CONFIG: RU-Mihomo.yaml
           # reload: the core reads its config again through its own API, the
-          # proxy stays up. restart: OpenClash is restarted, the proxy is
-          # down for half a minute. none: the new lists are used after the
-          # next restart.
+          # proxy stays up. restart: the core is restarted, the proxy is down
+          # for half a minute. none: the new lists are used after the next
+          # restart.
           APPLY: "reload"
         run: |
           set -e
@@ -83,8 +82,22 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          export SSH_KEY=~/.ssh/deploy_key
-          bash ./scripts/deploy.sh
+          SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -p ${ROUTER_PORT:-22} -i ~/.ssh/deploy_key"
+          REMOTE="${ROUTER_USER:-root}@$ROUTER_HOST"
+          PATH_ON_ROUTER="${ROUTER_PATH:-/etc/mihomo}"
+          # the layout of mixomo: the rule-sets in rule-files/, the scripts
+          # next to them, the lists in lists/
+          ssh $SSH_OPTS "$REMOTE" "mkdir -p '$PATH_ON_ROUTER/rule-files' '$PATH_ON_ROUTER/scripts' '$PATH_ON_ROUTER/lists'"
+          # scp -O: OpenSSH 9 copies over SFTP by default and the dropbear of
+          # OpenWrt has no sftp-server.
+          scp -O -P "${ROUTER_PORT:-22}" -i ~/.ssh/deploy_key ruleset/*.mrs \
+            "$REMOTE:$PATH_ON_ROUTER/rule-files/"
+          scp -O -P "${ROUTER_PORT:-22}" -i ~/.ssh/deploy_key \
+            scripts/build-ruleset.sh scripts/gen-mtrickle.sh scripts/update-mixomo.sh \
+            scripts/apply-rulesets.sh scripts/check-groups.sh \
+            "$REMOTE:$PATH_ON_ROUTER/scripts/"
+          ssh $SSH_OPTS "$REMOTE" \
+            "chmod +x '$PATH_ON_ROUTER/scripts/'*.sh && APPLY=$APPLY sh '$PATH_ON_ROUTER/scripts/apply-rulesets.sh'"
 
       - name: Check what the router has now
         env:
@@ -103,6 +116,8 @@ jobs:
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -p ${ROUTER_PORT:-22} -i ~/.ssh/deploy_key"
-          ssh $SSH_OPTS "${ROUTER_USER:-root}@$ROUTER_HOST" \
-            "ls '${ROUTER_PATH:-/etc/openclash}'/ruleset/*.mrs | wc -l; \
-             APPLY=check sh '${ROUTER_PATH:-/etc/openclash}'/scripts/apply-rulesets.sh"
+          REMOTE="${ROUTER_USER:-root}@$ROUTER_HOST"
+          PATH_ON_ROUTER="${ROUTER_PATH:-/etc/mihomo}"
+          ssh $SSH_OPTS "$REMOTE" \
+            "ls '$PATH_ON_ROUTER'/rule-files/*.mrs | wc -l; \
+             APPLY=check sh '$PATH_ON_ROUTER'/scripts/apply-rulesets.sh"

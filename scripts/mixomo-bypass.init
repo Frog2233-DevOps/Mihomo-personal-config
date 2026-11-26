@@ -10,7 +10,11 @@
 #  after a restart (it remembers the rules around them), so the rule stays
 #  in front of them.
 # =============================================================================
+# The run levels of rc.common. The script itself does not use them - the
+# init system of OpenWrt does.
+# shellcheck disable=SC2034
 START=99
+# shellcheck disable=SC2034
 STOP=10
 
 start() {
