@@ -95,9 +95,10 @@ fetch() {
 step "1. Downloading source lists"
 
 fetch "$WORK/rkn.lst" \
-  "https://github.com/1andrevich/Re-filter-lists/releases/latest/download/domains_all.lst" \
-  "https://ghfast.top/https://github.com/1andrevich/Re-filter-lists/releases/latest/download/domains_all.lst" \
-  "https://gh-proxy.com/https://github.com/1andrevich/Re-filter-lists/releases/latest/download/domains_all.lst"
+  "https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/domains_all.lst" \
+  "https://cdn.jsdelivr.net/gh/1andrevich/Re-filter-lists@main/domains_all.lst" \
+  "https://gh-proxy.com/https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/domains_all.lst" \
+  "https://github.com/1andrevich/Re-filter-lists/releases/latest/download/domains_all.lst"
 log "domains_all.lst" "$(wc -l < "$WORK/rkn.lst" 2>/dev/null || echo MISSING) lines"
 
 fetch "$WORK/community.lst" \
@@ -107,9 +108,10 @@ fetch "$WORK/community.lst" \
 log "community.lst" "$(wc -l < "$WORK/community.lst" 2>/dev/null || echo MISSING) lines"
 
 fetch "$WORK/rkn-ip.lst" \
-  "https://github.com/1andrevich/Re-filter-lists/releases/latest/download/ipsum.lst" \
-  "https://ghfast.top/https://github.com/1andrevich/Re-filter-lists/releases/latest/download/ipsum.lst" \
-  "https://gh-proxy.com/https://github.com/1andrevich/Re-filter-lists/releases/latest/download/ipsum.lst"
+  "https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/ipsum.lst" \
+  "https://cdn.jsdelivr.net/gh/1andrevich/Re-filter-lists@main/ipsum.lst" \
+  "https://gh-proxy.com/https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/ipsum.lst" \
+  "https://github.com/1andrevich/Re-filter-lists/releases/latest/download/ipsum.lst"
 log "ipsum.lst" "$(wc -l < "$WORK/rkn-ip.lst" 2>/dev/null || echo MISSING) lines"
 
 fetch "$WORK/antiad.txt" \

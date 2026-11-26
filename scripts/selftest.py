@@ -280,14 +280,23 @@ check(bool(ad_block) and ad_block.group(1) == "blackhole",
       "the ad list of MagiTrickle is on the interface blackhole (got: %s)"
       % (ad_block.group(1) if ad_block else "nothing"))
 
-# The lists are fetched from raw.githubusercontent.com: the release assets of
-# github.com do not load from Russia (measured: the timeout is 21 s).
-# (This check comes with the fix of the sources - see the commit that moves
-# the lists to raw.githubusercontent.com.)
+# The lists are fetched from raw.githubusercontent.com and not from the assets
+# of the releases of github.com. The assets are not always published (the
+# asset "community.lst" is not there at all - measured: 404), and the file
+# of the branch is the same file (measured: the same md5).
 release_urls = re.findall(r"url:\s*(\S*github\.com/\S*releases\S*)", mt)
-if release_urls:
-    print("  NOTE the lists of MagiTrickle are still fetched from the releases"
-          " of github.com: %s" % ", ".join(release_urls))
+check(not release_urls,
+      "the lists of MagiTrickle are not fetched from the releases of github.com"
+      + (": %s" % ", ".join(release_urls) if release_urls else ""))
+
+# Every list has to be on a raw address or on a mirror of one.
+list_urls = re.findall(r"url:\s*(\S+)", mt)
+bad_urls = [u for u in list_urls
+            if not (u.startswith("https://raw.githubusercontent.com/")
+                    or u.startswith("https://cdn.jsdelivr.net/gh/"))]
+check(not bad_urls,
+      "every list of MagiTrickle is fetched from raw.githubusercontent.com"
+      + (": %s" % ", ".join(bad_urls) if bad_urls else ""))
 
 print()
 if fail:

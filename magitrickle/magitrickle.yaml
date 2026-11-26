@@ -198,7 +198,7 @@ subscriptions:
     name: "🚫 RKN Blocked"
     interface: Mihomo
     enable: true
-    url: https://github.com/1andrevich/Re-filter-lists/releases/latest/download/domains_all.lst
+    url: https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/domains_all.lst
     interval: 604800
     rules: []
 
@@ -219,7 +219,7 @@ subscriptions:
     name: "🛑 RKN IP"
     interface: Mihomo
     enable: true
-    url: https://github.com/1andrevich/Re-filter-lists/releases/latest/download/ipsum.lst
+    url: https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/ipsum.lst
     interval: 604800
     rules: []
 
