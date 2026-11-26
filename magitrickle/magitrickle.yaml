@@ -48,6 +48,25 @@
 #                its rule-sets. The ad list uses it: 110 000 domains stay
 #                out of the RAM of the core.
 #
+#  The memory of the daemon:
+#
+#    The daemon of MagiTrickle keeps every domain of every list in its RAM -
+#    about 13 kB for every domain (measured on a router with 239 MB:
+#    1 000 domains - 27 MB of RSS, 5 000 - 79 MB, 10 000 - killed by the
+#    oom-killer of the kernel). A daemon that is killed updates no list at
+#    all, so scripts/gen-mtrickle.sh checks the size of the lists before it
+#    writes this file:
+#
+#      - a list that does not fit into MAX_DOMAINS is switched off (and the
+#        script says so);
+#      - the ad list is switched off on a router with less than MIN_RAM_MB
+#        of RAM.
+#
+#    The lists of this file are big on purpose: "domains_all.lst" has 81 460
+#    lines, "ipsum.lst" 27 546 subnets, the ad list 110 218. On a router
+#    with 256 MB only the small ones fit - see docs/MIXOMO.md, section
+#    "The memory of the router".
+#
 #  Where to read what:
 #    docs/MIXOMO.md - the scheme, the installation, the checks
 # =============================================================================
@@ -83,6 +102,10 @@ app:
     ipset:
       tablePrefix: mt_
     disableIPv4: false
+    # The IPv6 of the daemon is decided by the router: on a router with IPv6
+    # switched off the daemon would try to add an IPv6 route to the tunnel
+    # device and die. scripts/gen-mtrickle.sh writes the value that fits the
+    # router (IPV6=auto).
     disableIPv6: false
     # The first mark and routing table MagiTrickle may use. The same value
     # is in mixomo (MIXOMO_REDIR_DEFAULT_MARK) - the two must not collide.
@@ -155,17 +178,27 @@ groups:
 #
 #  The interval is in seconds. A week is enough: the lists change slowly,
 #  and the router does not have to fetch 200 000 lines every day.
+#
+#  The state of every list (enable: true or false) is decided by
+#  scripts/gen-mtrickle.sh: a list that does not fit into the memory of the
+#  router is switched off, and the script says which one and why.
 # =============================================================================
 subscriptions:
   # --- The list of the Russian registrar: blocked ---
   # 82 000 domains. They are sent into the core, where the rule
   # "RKN Blocked" decides what happens with them (a node by default, the
   # group can also be set to REJECT).
+  #
+  # The list is fetched from the branch of the repository and not from the
+  # assets of the release: the assets are not always published (the asset
+  # "community.lst" is not there at all - measured: 404), and the file of
+  # the branch is the same file (measured: 81 460 lines, md5
+  # c9b79dc0fde5829b2690450781a1ec2e through both addresses).
   - id: 701cde4f
     name: "🚫 RKN Blocked"
     interface: Mihomo
     enable: true
-    url: https://github.com/1andrevich/Re-filter-lists/releases/latest/download/domains_all.lst
+    url: https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/domains_all.lst
     interval: 604800
     rules: []
 
@@ -180,12 +213,13 @@ subscriptions:
     rules: []
 
   # The IP addresses of the list. They are subnets, so they are matched by
-  # the address and not by the name.
+  # the address and not by the name. The same file as above (measured:
+  # 27 546 subnets, md5 0d1e2a41bb65888dc41a20e5191d75a2).
   - id: 02b43d0a
     name: "🛑 RKN IP"
     interface: Mihomo
     enable: true
-    url: https://github.com/1andrevich/Re-filter-lists/releases/latest/download/ipsum.lst
+    url: https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/ipsum.lst
     interval: 604800
     rules: []
 

@@ -185,6 +185,54 @@ These are not style preferences, each of them has a reason that was measured.
     the repository - copied flat into `/etc/mihomo/` the root becomes `/etc`
     and the build fails with `/etc/lists/custom-domains.list not found`.
 
+26. **The IPv6 of the tunnel device is a local thing.** The device `Mihomo`
+    is created by hev-socks5-tunnel and inherits
+    `net.ipv6.conf.default.disable_ipv6`, so on a router with IPv6 switched
+    off it comes up with IPv6 disabled. The original report for this router
+    was a death at once: `failed to link ipset to interface: error adding
+    iface route: permission denied`. **That death was NOT reproduced with
+    the Mod build** (daemon 0.5.2-badigit.18): the daemon writes `no
+    addresses on interface for current IP family, skipping route family=10
+    iface=Mihomo` and keeps working (measured: alive, 11.8 MB of RSS). Which
+    build dies is not checked here - do not write the death down as a fact
+    of the scheme. The fix enables IPv6 on **this one device** (never
+    globally, never on `br-lan`) and starts MagiTrickle again - see
+    `scripts/mixomo-ipv6.sh` and `scripts/mixomo-ipv6.init`. The device is
+    created again at every start of the tunnel, so the state is checked
+    and repaired, not set once. `FIX_IPV6=0` in `/etc/mihomo/mixomo.conf`
+    switches the fix off. Do not enable IPv6 on the whole router to make
+    this problem go away: the scheme does not use IPv6.
+27. **The state of MagiTrickle must match the router.** `disableIPv6` in
+    the state file is written by `scripts/gen-mtrickle.sh` from the value
+    `IPV6` (`auto` by default: only when the router has IPv6). The router
+    knows better than the template what it can do.
+28. **The memory of the router is the limit of the scheme.** The daemon of
+    MagiTrickle keeps every domain of every list in its RAM - about 13 kB for
+    every domain (measured on a router with 239 MB: 1 000 domains - 27 MB of
+    RSS, 5 000 - 79 MB, 10 000 - killed by the oom-killer of the kernel, and
+    the core dies with it). `scripts/gen-mtrickle.sh` counts the domains of
+    the local groups and the lines of the lists (the size is checked with
+    `curl`, the list is not downloaded when `PROBE=0`), and switches off every
+    list that does not fit into `MAX_DOMAINS` (default: 5000). A list that is
+    switched off has to be reported loudly - the traffic of those domains
+    then does not go through the proxy. `scripts/mixomo-memlimit.sh` sets
+    `GOMEMLIMIT` for the core and for the daemon (a soft limit: the garbage
+    collector works harder instead of the kernel killing the process), and
+    `scripts/mixomo-ram.sh` prints the numbers.
+29. **A number in the documentation is a measurement.** Every value that is
+    written down (the memory of the daemon, the size of a list, the RSS of the
+    core) comes from a measurement on a named router with a named build, and
+    the router and the build are named next to it. Values that could not be
+    reproduced are marked as such.
+30. **A switched-off subscription must not be able to kill the router.** The
+    daemon downloads the list of a subscription when an update is asked for in
+    the web interface - **even when the subscription is switched off**
+    (measured on the router: the update of the list of 81 460 domains took the
+    daemon and the core with it). So the URL of a switched-off list points to
+    nothing (`http://127.0.0.1:1/switched-off.lst`), the update fails at
+    once, and the original URL stays in the comment of the state file next to
+    the reason why the list is off.
+
 ## The DNS scheme
 
 * DoH by IP (`1.1.1.1`, `9.9.9.9`) - a hostname needs a resolver in the

@@ -172,9 +172,12 @@ Two things to set, everything else has a working default:
 | `scripts/apply-rulesets.sh` | runs on the router: tells the running core to reload its config through its own API, without a restart |
 | `scripts/check-groups.sh` | runs on the router: what ended up in every group |
 | `scripts/bypass-ports.sh`, `scripts/mixomo-bypass.init` | keep the traffic of the listed ports out of the core |
+| `scripts/mixomo-ram.sh` | runs on the router: the report of the memory - the RAM of the router, the RSS of the core and of the daemon, the oom-killer |
+| `scripts/mixomo-memlimit.sh` | sets the soft memory limit (`GOMEMLIMIT`) of the core and of the daemon of MagiTrickle |
 | `scripts/selftest.sh`, `scripts/selftest.py` | `mihomo -t`, the checks of the config and `shellcheck` for the scripts of the router |
 | `tests/run-all.sh` | the full regression suite of the scheme |
 | `docs/MIXOMO.md`, `docs/MIXOMO-RU.md` | the scheme, the installation, the measurements, the troubleshooting |
+| `docs/UPSTREAM-ISSUES.md` | the texts of the issues for the upstream projects (MagiTrickle), ready to be sent |
 | `AGENTS.md` | the rules that must not be broken, for AI models and for humans |
 
 The OpenClash layout (the config for the "everything through the core" scheme)
@@ -182,14 +185,27 @@ is in the branch `legacy/openclash`.
 
 ## Numbers
 
-Measured on the router (Cudy WR3000S v1, 239 MB RAM, mihomo v1.19.34):
+Measured on the router (Cudy WR3000S v1, 239 MB RAM, mihomo v1.19.34,
+MagiTrickle 0.8.2-r1, daemon 0.5.2-badigit.18):
 
 | | |
 |---|---|
 | RAM, the core with the config of the scheme | 60.7 MB RSS (average of 3 runs) |
 | RAM, the core with the "lite" variant | 60.8 MB RSS - no saving, the variant was removed |
 | RAM, the rule-sets on the flash | 1.7 MB in 28 files |
+| RAM, the daemon of MagiTrickle (the app only) | 14.8 MB RSS |
+| RAM, the daemon with 1 000 domains | 27.0 MB RSS |
+| RAM, the daemon with 5 000 domains | 77.4 MB RSS |
+| RAM, the daemon with 5 000 domains and `GOMEMLIMIT=64MiB` | 64.0 MB RSS |
+| RAM, the daemon with 10 000 domains | killed by the oom-killer |
+| RAM for every domain of a list | about 13 kB |
 | Rule-sets rebuilt | daily by `rulesets.yml` |
+
+The lists of the scheme are too big for a router with 256 MB of RAM: the
+daemon keeps every domain of every list in its memory, and the oom-killer
+takes it when the lists do not fit. `scripts/gen-mtrickle.sh` measures the
+size of the lists before it writes the state and switches off every list
+that does not fit into `MAX_DOMAINS` (5 000 by default).
 
 The numbers of the daemon, of the oom-killer and the measurements of the
 lists are in [docs/MIXOMO.md](docs/MIXOMO.md).
