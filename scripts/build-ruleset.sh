@@ -18,8 +18,8 @@
 #  Run it from the repository root, or with an explicit output directory:
 #      ./scripts/build-ruleset.sh ./ruleset
 #
-#  On a router without internet access to GitHub, run it on a PC and copy the
-#  ruleset/ folder over (scripts/deploy.sh does that).
+#  On a router without internet access to the sources, run it on a PC and copy
+#  the ruleset/ folder over.
 # =============================================================================
 set -u
 
@@ -47,7 +47,7 @@ fi
 
 mkdir -p "$OUT"
 
-# The downloader. curl comes with OpenClash, but on a plain OpenWrt there is
+# The downloader. mixomo installs curl, but on a plain OpenWrt there is
 # only uclient-fetch (busybox) and wget - and this script runs unattended from
 # the cron of the router.
 DL=""
@@ -66,7 +66,7 @@ step() { printf '\n=== %s ===\n' "$1"; }
 # raw.githubusercontent.com is not always fast, and sometimes blocked.
 # fetch <dest> <url> [url ...]
 #
-# curl is what OpenClash installs, but a plain OpenWrt has only uclient-fetch
+# curl is what mixomo installs, but a plain OpenWrt has only uclient-fetch
 # (busybox) and wget. The daily cron must not depend on one package being
 # there - the build runs on the router, unattended.
 fetch_one() { # fetch_one <url> <dest>
@@ -243,6 +243,6 @@ for f in "$OUT"/*.mrs; do
   sz=$(wc -c < "$f" 2>/dev/null || echo 0)
   total=$((total + sz))
 done
-printf '  Files: %s, total: %s\n' "$(ls -1 "$OUT"/*.mrs 2>/dev/null | wc -l)" "$(du -sh "$OUT" | cut -f1)"
+printf '  Files: %s, total: %s\n' "$(find "$OUT" -maxdepth 1 -name '*.mrs' 2>/dev/null | wc -l)" "$(du -sh "$OUT" | cut -f1)"
 printf '  Bytes: %s\n\n' "$total"
 echo "Done. Files in: $OUT"

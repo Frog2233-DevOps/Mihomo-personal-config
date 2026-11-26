@@ -14,7 +14,7 @@
 #             connections are not cut, the new rule-sets are in use after a
 #             second. This is the default.
 #
-#   restart  stop and start OpenClash. Simple, but the proxy is down for
+#   restart  stop and start the core. Simple, but the proxy is down for
 #             half a minute. The fallback when the reload does not work.
 #
 #    none     do nothing, the new lists are used after the next restart.
@@ -23,8 +23,8 @@
 #             how many rules they hold. Nothing is changed.
 #
 #  Usage on the router:
-#      sh /etc/openclash/scripts/apply-rulesets.sh
-#      APPLY=restart sh /etc/openclash/scripts/apply-rulesets.sh
+#      sh /etc/mihomo/scripts/apply-rulesets.sh
+#      APPLY=restart sh /etc/mihomo/scripts/apply-rulesets.sh
 #
 #  How the reload works:
 #    1. find the config the core was started with (ps / /proc)
@@ -62,7 +62,10 @@ find_running_config() {
   cfg=""
 
   # 1. ps. On busybox "ps w" prints the whole command line:
-  #    /bin/sh -c exec /etc/openclash/core/clash_meta -d /etc/openclash -f /etc/openclash/RU-Mihomo.yaml
+  #    /bin/sh -c exec /usr/bin/mihomo -d /etc/mihomo -f /etc/mihomo/config.yaml
+  # pgrep is not an option: the busybox of the router does not show the
+  # arguments of the process.
+  # shellcheck disable=SC2009
   ps w 2>/dev/null | grep -E 'clash|mihomo' | grep -v grep | while read -r line; do
     p="$(printf '%s' "$line" | sed -n 's/.*[ ]-f[ ]\([^ ]*\).*/\1/p')"
     if [ -n "$p" ] && [ -f "$p" ]; then printf '%s' "$p"; break; fi
@@ -71,7 +74,7 @@ find_running_config() {
   # 2. /proc, for the systems where ps does not show the arguments. The
   #    command line of a process must contain "-f " and the file behind it
   #    must exist - otherwise this script would find ITSELF (on the router
-  #    its own path contains "openclash") and stop with an empty result.
+  #    its own path contains "apply-rulesets") and stop with an empty result.
   if [ ! -s "$TMP_OUT" ]; then
     for p in /proc/[0-9]*/cmdline; do
       [ -r "$p" ] || continue
@@ -97,8 +100,8 @@ find_running_config() {
 }
 
 # --- secret and address out of the config ------------------------------------
-# OpenClash writes both into the config it starts the core with
-# (yml_change.sh: external-controller: '0.0.0.0:<port>' and secret: '<secret>').
+# The config of the scheme (/etc/mihomo/config.yaml) holds both: the core is
+# started with it and it is the file that is reloaded.
 read_from_config() {
   [ -f "$1" ] || return 1
   case "$2" in
@@ -141,14 +144,14 @@ do_reload() {
 
 # --- restart -----------------------------------------------------------------
 do_restart() {
-  if [ -x /etc/init.d/openclash ]; then
-    log "restarting OpenClash"
-    /etc/init.d/openclash restart >/dev/null 2>&1
+  if [ -x /etc/init.d/mihomo ]; then
+    log "restarting the core"
+    /etc/init.d/mihomo restart >/dev/null 2>&1
     sleep 3
     log "done"
     return 0
   fi
-  log "OpenClash is not installed - nothing to restart"
+  log "the core is not installed (no /etc/init.d/mihomo) - nothing to restart"
   return 1
 }
 
@@ -191,11 +194,14 @@ do_check() {
 # --- go ----------------------------------------------------------------------
 case "$APPLY" in
   none)
-    log "APPLY=none - the new rule-sets are used after the next restart of OpenClash"
+    log "APPLY=none - the new rule-sets are used after the next restart of the core"
     exit 0 ;;
   check)
     cfg="$(find_running_config)"
-    [ -n "$cfg" ] && [ -f "$cfg" ] || { log "the running config was not found"; exit 1; }
+    if [ -z "$cfg" ] || [ ! -f "$cfg" ]; then
+      log "the running config was not found"
+      exit 1
+    fi
     [ -n "$API_ADDR" ] || API_ADDR="$(read_from_config "$cfg" controller)"
     [ -n "$SECRET" ]   || SECRET="$(read_from_config "$cfg" secret)"
     do_check "$cfg" "$API_ADDR" "$SECRET"

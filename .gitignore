@@ -19,3 +19,10 @@ config.yaml
 
 # the local copy of the rules (the compiled .mrs files ARE tracked)
 lists/*.local
+
+# the cores that the CI downloads into the root of the repository
+mihomo
+mihomo-smart
+mihomo.gz
+mihomo-smart.gz
+mihomo.exe

@@ -42,7 +42,11 @@
 
 ## Что меняется в конфиге
 
-| | `RU-Mihomo.yaml` (OpenClash) | `RU-Mihomo-mixomo.yaml` |
+Первый столбец - раскладка OpenClash. В `main` её больше нет, она лежит в
+ветке `legacy/openclash`. Сравнение осталось здесь, чтобы было видно, что
+схема поменяла и почему.
+
+| | раскладка OpenClash (`legacy/openclash`) | `RU-Mihomo-mixomo.yaml` |
 |---|---|---|
 | `mixed-port` | 7893 | **7890** - socks5-порт туннеля и значение, которое проверяет mixomo |
 | `redir-port` | - | 5001 - прозрачный порт ядра |
@@ -88,6 +92,12 @@ rule-provider `antiad` в `RU-Mihomo-mixomo.yaml` **и** поменяйте ин
 | `scripts/setup-mixomo.sh` | ставит схему на роутер |
 | `scripts/gen-mtrickle.sh` | пишет состояние MagiTrickle по rule-set'ам |
 | `scripts/update-mixomo.sh` | ежедневное обновление rule-set'ов |
+| `scripts/apply-rulesets.sh` | говорит работающему ядру перечитать новые файлы |
+| `scripts/check-groups.sh` | что попало в каждую группу ядра |
+| `scripts/bypass-ports.sh`, `scripts/mixomo-bypass.init` | держат трафик перечисленных портов вне ядра |
+| `scripts/build-ruleset.sh` | собирает rule-set'ы из исходных списков |
+| `scripts/selftest.sh`, `scripts/selftest.py` | `mihomo -t`, `shellcheck` и проверки консистентности |
+| `AGENTS.md` | правила, которые нельзя ломать |
 
 ## Установка
 

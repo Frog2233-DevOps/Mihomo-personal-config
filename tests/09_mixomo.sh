@@ -88,7 +88,9 @@ has "$MT" "port: 3553"
 has "$MT" "port: 8080"
 has "$MT" "- br-lan"
 # The ads are dropped by the router, not by the core.
-if grep -A6 'name: "🛡 Anti-AD"' "$MT" | grep -q 'interface: blackhole'; then
+# LC_ALL=C: the pattern holds a multi-byte character and the byte comparison
+# is the same on every system (and on every locale).
+if LC_ALL=C grep -A6 'name: "🛡 Anti-AD"' "$MT" | LC_ALL=C grep -q 'interface: blackhole'; then
   ok "the ad list is dropped by the router (blackhole)"
 else
   bad "the ad list is not on blackhole"
@@ -182,15 +184,21 @@ if [ -n "$MIHOMO" ]; then
     if grep -q 'openai.com' "$TMPDIR_TEST/mt/config.yaml"; then ok "the AI group has the domains of the rule-set"; else bad "the AI group is empty"; fi
     if grep -q '^subscriptions:' "$TMPDIR_TEST/mt/config.yaml"; then ok "the subscriptions survived"; else bad "the subscriptions are gone"; fi
     # The ids of the rules have to be eight hex characters.
-    if ruby -ryaml -e '
-      d = YAML.load_file(ARGV[0])
-      d["groups"].each do |g|
-        (g["rules"] || []).each { |r| raise "bad rule id #{r["id"].inspect}" unless r["id"].to_s =~ /\A[0-9a-f]{8}\z/ }
-      end
-    ' "$TMPDIR_TEST/mt/config.yaml" >/dev/null 2>&1; then
-      ok "every rule has a valid id"
+    # ruby is not everywhere - the check is skipped, not failed, when it is
+    # missing (the same as the check of the state configuration above).
+    if command -v ruby >/dev/null 2>&1; then
+      if ruby -ryaml -e '
+        d = YAML.load_file(ARGV[0])
+        d["groups"].each do |g|
+          (g["rules"] || []).each { |r| raise "bad rule id #{r["id"].inspect}" unless r["id"].to_s =~ /\A[0-9a-f]{8}\z/ }
+        end
+      ' "$TMPDIR_TEST/mt/config.yaml" >/dev/null 2>&1; then
+        ok "every rule has a valid id"
+      else
+        bad "a rule has an invalid id"
+      fi
     else
-      bad "a rule has an invalid id"
+      skip "the ids of the rules are not checked (no ruby)"
     fi
   else
     bad "no state file was written"
