@@ -3,7 +3,7 @@
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
 rc=0
-for t in "$DIR"/0*.sh; do
+for t in "$DIR"/[0-9]*.sh; do
   echo
   echo "############################################################"
   echo "### $(basename "$t")"

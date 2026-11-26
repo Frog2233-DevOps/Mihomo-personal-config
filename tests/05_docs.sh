@@ -5,7 +5,7 @@ set -u
 cd "$ROOT"
 
 section "1. every English doc has a full Russian twin"
-for en in docs/DESIGN.md docs/GROUPS.md docs/INSTALL.md docs/RULESETS.md docs/TEST-REPORT.md; do
+for en in docs/DESIGN.md docs/GROUPS.md docs/INSTALL.md docs/RULESETS.md docs/TEST-REPORT.md docs/MIXOMO.md; do
   ru="${en%.md}-RU.md"
   [ -f "$ru" ] || { bad "$ru missing"; continue; }
   # Compare the number of top-level sections: a stub translation is not enough.

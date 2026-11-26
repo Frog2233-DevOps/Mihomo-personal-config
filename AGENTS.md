@@ -128,6 +128,30 @@ These are not style preferences, each of them has a reason that was measured.
     `update-rulesets.sh` and the apply through the API - in the layout of the
     router, on a real core. It found two bugs that the other suites missed.
     Run it after every change to the scripts that run on the router.
+22. **The mixomo layout is a second layout, not a variant of the first.**
+    `RU-Mihomo-mixomo.yaml` belongs to the scheme of mixomo-openwrt, where
+    only the traffic that MagiTrickle marked goes into the core. Its
+    settings are forced by that scheme and must not be "improved":
+    `mixed-port` has to be 7890 (the installer of mixomo keeps a config only
+    with that port), `enhanced-mode` has to be `redir-host` (with fake-ip the
+    client sends **all** of its traffic to 198.18.0.0/16, and only the marked
+    addresses reach the core - the rest would leave the router towards a fake
+    address), and the rule-sets belong in `./rule-files/`. The ad list is
+    deliberately **not** in the core of that layout: MagiTrickle drops it with
+    the interface `blackhole`, which keeps 110 000 domains out of the RAM of
+    the core.
+23. **The state of MagiTrickle has to work with both builds.** The original
+    build and the mod build read `dnsProxy.timeout` and
+    `netfilter.ipset.additionalTTL` differently (a duration against a number
+    of seconds). Do not set these fields: use the default of the build. The
+    `configVersion` has to start with `0.1.` - the mod build rejects
+    anything else, the original build accepts everything that starts with
+    `0.`.
+24. **A service that is not on a list of MagiTrickle never reaches the
+    core.** In the mixomo layout the rules of the core only decide what
+    happens to the traffic that was selected. When a service has to go
+    through the proxy, it needs a list in MagiTrickle - a rule in
+    `RU-Mihomo-mixomo.yaml` alone changes nothing.
 
 ## The DNS scheme
 

@@ -113,6 +113,43 @@ does not know the type `smart`.
 ./scripts/make-lite.sh && ./scripts/make-smart.sh
 ```
 
+## The mixomo scheme (only the selected traffic through the core)
+
+The layout above sends **all** the traffic of the clients through the core:
+the rules are matched for every packet, every connection is tracked, the DNS
+is answered by the core. That is why the speed drops and why UDP packets get
+lost on the way.
+
+The mixomo scheme fixes both by sending **only the selected** traffic through
+the core:
+
+```
+client -> MagiTrickle (DNS, marks the addresses of its lists)
+       -> hev-socks5-tunnel (tun "Mihomo")
+       -> mihomo (mixed-port 7890) -> the node
+```
+
+Everything that is not on a list goes to the provider at the full speed of
+the line and never touches the core.
+
+| File | |
+|---|---|
+| `RU-Mihomo-mixomo.yaml` | the config of the core for that layout |
+| `magitrickle/magitrickle.yaml` | the state of MagiTrickle: the groups and the subscriptions |
+| `magitrickle/magitrickle.mtrickle` | the same groups in the JSON format of the web interface |
+| `scripts/setup-mixomo.sh` | installs the scheme on the router |
+| `scripts/gen-mtrickle.sh` | writes the state of MagiTrickle from the rule-sets |
+| `scripts/update-mixomo.sh` | the daily refresh of the rule-sets |
+
+```sh
+curl -fsSL https://github.com/Internet-Helper/mixomo-openwrt/raw/main/install.sh | sh
+curl -fsSL -o /tmp/setup-mixomo.sh \
+  https://raw.githubusercontent.com/Frog2233-DevOps/Mihomo-personal-config/main/scripts/setup-mixomo.sh
+SUB_URL='...' DASHBOARD_PASSWORD='...' sh /tmp/setup-mixomo.sh
+```
+
+`docs/MIXOMO.md` explains the scheme, the lists and the checks.
+
 ## The placeholders
 
 Two things to set, everything else has a working default:
@@ -145,6 +182,10 @@ otherwise they keep the old URL.
 | `scripts/update-rulesets.sh` | runs on the router: rebuilds the rule-sets with its own core, installs them and applies them - the lists update themselves |
 | `scripts/apply-rulesets.sh` | runs on the router: tells the running core to reload its config through its own API, without a restart |
 | `scripts/fix-exec.sh`, `scripts/fix-exec.ps1` | mark the scripts as executable (bash and PowerShell) |
+| `scripts/setup-mixomo.sh` | installs the mixomo scheme on the router: the config, the rule-sets, the state of MagiTrickle, the cron and the checks |
+| `scripts/gen-mtrickle.sh` | writes the state of MagiTrickle from the rule-sets and from your own list |
+| `scripts/update-mixomo.sh` | runs on the router: rebuilds the rule-sets and the state of MagiTrickle and reloads the core |
+| `magitrickle/magitrickle.yaml`, `magitrickle/magitrickle.mtrickle` | the groups and the subscriptions of MagiTrickle for the mixomo scheme |
 | `scripts/selftest.sh` | `mihomo -t` on every config + the checks on the filters, the groups and the files |
 | `tests/run-all.sh` | the full regression suite (configs, normalizer, scripts, docs, workflows); `tests/08_rehearsal.sh` runs the whole router cycle locally against a real core, `tests/04_cycle.sh` checks it on a real router |
 | `docs/DESIGN.md` | why every decision was made, with the measurements |

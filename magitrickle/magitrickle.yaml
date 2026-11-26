@@ -1,0 +1,264 @@
+# =============================================================================
+#  magitrickle.yaml - state configuration of MagiTrickle for the mixomo scheme
+# =============================================================================
+#  MagiTrickle is the part that decides WHAT goes into the core. It answers
+#  the DNS of the clients, compares the domains with its lists, and sends
+#  only the marked addresses into the core. Everything else goes to the
+#  provider at full speed and never touches the core.
+#
+#  This file is the state of the service:
+#      /etc/magitrickle/state/config.yaml
+#  scripts/setup-mixomo.sh writes it there (with a backup) and restarts the
+#  service. It is also readable as YAML and can be pasted into the web
+#  interface of MagiTrickle.
+#
+#  The companion file magitrickle.mtrickle is the same groups in the JSON
+#  format that the web interface exports ("Export" -> config.mtrickle).
+#  The interface imports GROUPS only - the subscriptions below have to be
+#  created by the script or in the interface itself.
+#
+#  Fields that the two builds of MagiTrickle read differently are left out
+#  on purpose:
+#
+#    app.dnsProxy.timeout      - a duration in the original build
+#                                (5s) and milliseconds in the mod build
+#                                (5000). A value that fits one is wrong for
+#                                the other, so the default of the build is
+#                                used.
+#    app.netfilter.ipset
+#    .additionalTTL            - the same problem (1h0m0s vs 86400).
+#    app.netfilter.tproxyPort   - only in the mod build. It is filled in
+#                                from the redir-port of the core when
+#                                mixomo installs the mod build.
+#    app.netfilter.directPriority, app.dnsProxy.clientTTLCap - only in the
+#                                mod build, the defaults are the ones we
+#                                want anyway.
+#
+#  configVersion is "0.1.4" on purpose: the mod build accepts only
+#  "0.1.*", the original build accepts anything that starts with "0.".
+#  "0.1.4" satisfies both.
+#
+#  The interface of a group:
+#
+#    Mihomo    - the traffic is sent into the core through the tun device
+#                of hev-socks5-tunnel. The core decides what to do with it
+#                (proxy, direct, reject) by its own rules.
+#    blackhole - the traffic is dropped by the router. It never reaches the
+#                core, so it costs no CPU of the core and no memory for
+#                its rule-sets. The ad list uses it: 110 000 domains stay
+#                out of the RAM of the core.
+#
+#  Where to read what:
+#    docs/MIXOMO.md - the scheme, the installation, the checks
+# =============================================================================
+
+configVersion: "0.1.4"
+
+app:
+  httpWeb:
+    enabled: true
+    auth:
+      enabled: false
+    host:
+      address: "[::]"
+      port: 8080
+    skin: default
+
+  dnsProxy:
+    host:
+      address: "[::]"
+      port: 3553
+    upstream:
+      address: 127.0.0.1
+      port: 53
+    disableRemap53: false
+    disableFakePTR: false
+    disableDropAAAA: false
+    maxIdleConns: 10
+    maxConcurrent: 100
+
+  netfilter:
+    iptables:
+      chainPrefix: MT_
+    ipset:
+      tablePrefix: mt_
+    disableIPv4: false
+    disableIPv6: false
+    # The first mark and routing table MagiTrickle may use. The same value
+    # is in mixomo (MIXOMO_REDIR_DEFAULT_MARK) - the two must not collide.
+    startMarkTableIndex: 1298229097
+
+  link:
+    - br-lan
+
+  showAllInterfaces: false
+  logLevel: info
+
+# =============================================================================
+#  Groups - the lists that are written into the state file by
+#  scripts/setup-mixomo.sh (the rules are generated from the rule-sets of
+#  the core and from lists/custom-domains.list).
+#
+#  The groups with an empty rule list are filled by the script. Do not add
+#  rules by hand here: the script rewrites this file.
+# =============================================================================
+groups:
+  # Your own domains: lists/custom-domains.list. The script reads the file
+  # and writes the rules. Empty until then.
+  - id: d9dce3ce
+    name: "⭐ Custom"
+    color: "#ffd700"
+    interface: Mihomo
+    enable: true
+    rules: []
+
+  # Netflix. Not in the itdoginfo lists, so it is built from the rule-set of
+  # the core (ruleset/netflix.mrs).
+  - id: 862d206b
+    name: "🎬 Streaming"
+    color: "#e50914"
+    interface: Mihomo
+    enable: true
+    rules: []
+
+  # OpenAI, Anthropic, xAI. The Russian AI services (category-ai-ru) are
+  # not here: they are direct in the core and must not be sent into it.
+  - id: 3e61482d
+    name: "🤖 AI"
+    color: "#10a37f"
+    interface: Mihomo
+    enable: true
+    rules: []
+
+  # GitHub and Steam are reachable from Russia without a proxy, so they are
+  # off by default: the traffic of these sites then never touches the core.
+  # Turn them on in the interface if you want them through the proxy.
+  - id: 89b87e29
+    name: "🐙 GitHub"
+    color: "#8b949e"
+    interface: Mihomo
+    enable: false
+    rules: []
+
+  - id: c217a8bc
+    name: "🎮 Steam"
+    color: "#66c0f4"
+    interface: Mihomo
+    enable: false
+    rules: []
+
+# =============================================================================
+#  Subscriptions - the lists that MagiTrickle downloads and refreshes by
+#  itself. The format of these files is one domain (or one CIDR) per line;
+#  MagiTrickle turns a domain into a namespace rule (the domain and its
+#  subdomains) and a CIDR into a subnet rule.
+#
+#  The interval is in seconds. A week is enough: the lists change slowly,
+#  and the router does not have to fetch 200 000 lines every day.
+# =============================================================================
+subscriptions:
+  # --- The list of the Russian registrar: blocked ---
+  # 82 000 domains. They are sent into the core, where the rule
+  # "RKN Blocked" decides what happens with them (a node by default, the
+  # group can also be set to REJECT).
+  - id: 701cde4f
+    name: "🚫 RKN Blocked"
+    interface: Mihomo
+    enable: true
+    url: https://github.com/1andrevich/Re-filter-lists/releases/latest/download/domains_all.lst
+    interval: 604800
+    rules: []
+
+  # The community list: the same, but the domains that the community
+  # reported. It goes into the same group of the core.
+  - id: 3155bb6f
+    name: "🚫 RKN Community"
+    interface: Mihomo
+    enable: true
+    url: https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/community.lst
+    interval: 604800
+    rules: []
+
+  # The IP addresses of the list. They are subnets, so they are matched by
+  # the address and not by the name.
+  - id: 02b43d0a
+    name: "🛑 RKN IP"
+    interface: Mihomo
+    enable: true
+    url: https://github.com/1andrevich/Re-filter-lists/releases/latest/download/ipsum.lst
+    interval: 604800
+    rules: []
+
+  # --- Ads ---
+  # 110 000 domains, dropped by the router itself (blackhole). The core
+  # does not see them and does not keep them in its memory.
+  - id: 123e19fc
+    name: "🛡 Anti-AD"
+    interface: blackhole
+    enable: true
+    url: https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/master/anti-ad-domains.txt
+    interval: 604800
+    rules: []
+
+  # --- Services that are blocked in Russia ---
+  # These are sent into the core, where the rule of the service decides
+  # which node is used.
+  - id: 05ad485b
+    name: "💬 Telegram"
+    interface: Mihomo
+    enable: true
+    url: https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/telegram.lst
+    interval: 604800
+    rules: []
+
+  - id: a1914e6c
+    name: "🎮 Discord"
+    interface: Mihomo
+    enable: true
+    url: https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/discord.lst
+    interval: 604800
+    rules: []
+
+  - id: 9c46418e
+    name: "📱 Meta"
+    interface: Mihomo
+    enable: true
+    url: https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/meta.lst
+    interval: 604800
+    rules: []
+
+  - id: 40536f5b
+    name: "🧱 Roblox"
+    interface: Mihomo
+    enable: true
+    url: https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/roblox.lst
+    interval: 604800
+    rules: []
+
+  - id: cc460c54
+    name: "🤖 Google AI"
+    interface: Mihomo
+    enable: true
+    url: https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/google_ai.lst
+    interval: 604800
+    rules: []
+
+  # --- Services that work from Russia ---
+  # They are off by default: the traffic of these sites then never touches
+  # the core, which is the whole point of the scheme. Turn them on in the
+  # interface if you want them through the proxy.
+  - id: 74832f4a
+    name: "▶️ YouTube"
+    interface: Mihomo
+    enable: false
+    url: https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/youtube.lst
+    interval: 604800
+    rules: []
+
+  - id: 0db24b28
+    name: "🐦 Twitter"
+    interface: Mihomo
+    enable: false
+    url: https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/twitter.lst
+    interval: 604800
+    rules: []

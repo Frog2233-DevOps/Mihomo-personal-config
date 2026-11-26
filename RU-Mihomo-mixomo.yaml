@@ -1,0 +1,624 @@
+# =============================================================================
+#  RU-Mihomo-mixomo.yaml - mihomo configuration for the mixomo scheme
+# =============================================================================
+#  Same config as RU-Mihomo.yaml, but for the mixomo-openwrt layout:
+#
+#      MagiTrickle -> hev-socks5-tunnel (tun "Mihomo") -> mihomo
+#
+#  In this layout the traffic does NOT go through the core by default.
+#  MagiTrickle answers the DNS, compares the domains with its lists and
+#  marks only those addresses; only the marked traffic is sent into the
+#  core, everything else goes to the provider at full speed and never
+#  touches the userspace core. That is the whole point of the scheme:
+#  the speed loss and the UDP timeouts of the "everything through the
+#  core" layout do not happen here.
+#
+#  Differences from RU-Mihomo.yaml (and why):
+#
+#    mixed-port: 7890   - required by mixomo (it is the socks5 port of the
+#                          hev-socks5-tunnel) and by the installer, which
+#                          keeps a config that has this port instead of
+#                          overwriting it with the default one.
+#    redir-port          - the transparent port of the core. The MagiTrickle
+#                          mod variant can send UDP to it directly.
+#    routing-mark: 2     - the mark the core puts on its own connections.
+#    dns.listen: 7880    - the DNS port of the core in this layout.
+#    enhanced-mode:      - redir-host, not fake-ip. See the DNS section.
+#    rule-files/         - the directory mixomo creates for the rule-sets.
+#    proxy-providers/    - the directory mixomo creates for the providers.
+#
+#  Where to read what:
+#    docs/MIXOMO.md   - the scheme, the installation, the checks
+#    docs/DESIGN.md   - every decision and the measurement behind it
+#    docs/GROUPS.md   - what each proxy group is for
+#
+#  The file is installed to /etc/mihomo/config.yaml by
+#  scripts/setup-mixomo.sh. Do not edit it on the router: the script
+#  overwrites it on every run.
+# =============================================================================
+
+mixed-port: 7890
+redir-port: 5001
+allow-lan: true
+bind-address: '*'
+mode: rule
+log-level: warning
+ipv6: false
+
+# The core marks its own connections, so they do not come back into the
+# tunnel. The value is the one mixomo uses.
+routing-mark: 2
+
+# LAN clients need credentials for the HTTP/SOCKS port. In this layout the
+# tunnel itself connects from 127.0.0.1, which is in skip-auth-prefixes.
+authentication:
+  - mihomo:CHANGE_ME
+skip-auth-prefixes:
+  - 127.0.0.0/8
+  - 192.168.0.0/16
+  - 10.0.0.0/8
+  - 172.16.0.0/12
+
+# One timing method for everything, so url-test compares RTT and not different
+# handshake types.
+unified-delay: true
+tcp-concurrent: true
+keep-alive-interval: 30
+keep-alive-idle: 600
+
+# On a router, finding processes is expensive and pointless: the traffic of
+# the clients is forwarded, there is no local process to find, and there are
+# no PROCESS-NAME rules in this config. "off" saves the lookup.
+#
+# The quotes are not decoration. YAML 1.1 reads a bare "off" as the boolean
+# false - and OpenClash rewrites this file with ruby (Psych) at every start.
+# Unquoted, the value would become "false" and the core would refuse to
+# start with "invalid find process mode". Measured: ruby round-trip of the
+# config turns the bare value into false, the quoted one survives.
+find-process-mode: 'off'
+
+# Remember the group selection across restarts.
+profile:
+  store-selected: true
+
+# Geo databases are not used: every rule below points at a local .mrs file.
+# geo-auto-update stays off so the core does not pull GeoIP.dat (16.5 MB) and
+# GeoSite.dat (4.4 MB) into a router with 84.8 MB of flash.
+geodata-mode: false
+geodata-loader: memconservative
+geo-auto-update: false
+
+external-controller: 0.0.0.0:9090
+# The dashboard password. Never leave it empty: an empty secret makes the API
+# answer with "Access-Control-Allow-Origin: *", i.e. any web page in the LAN
+# can drive the proxy.
+secret: CHANGE_ME
+
+# mixomo installs the dashboards into /etc/mihomo/UI/. zashboard and
+# metacubex are both there; pick one.
+external-ui: UI/metacubex
+
+# No cross-origin access to the API from a web page.
+external-controller-cors:
+  allow-origins: []
+  allow-private-network: false
+
+# ============================== DNS ==============================
+# The DNS of the clients is answered by MagiTrickle (it intercepts port 53
+# and asks the core on 127.0.0.1:53), and the core resolves what it needs
+# itself.
+#
+# enhanced-mode: redir-host - NOT fake-ip, and this is not a matter of taste.
+#
+#   In fake-ip the core answers with an address from 198.18.0.0/16. The
+#   client then sends ALL of its traffic to those addresses. But only the
+#   addresses that MagiTrickle marked go into the core - the rest would
+#   leave the router towards a fake address in the 198.18.0.0/16 range and
+#   never arrive. fake-ip therefore forces "everything through the core",
+#   which is exactly what this layout is meant to avoid.
+#
+#   With redir-host the client gets a real address, MagiTrickle marks the
+#   same real address, and the domain inside the core is recovered by the
+#   sniffer (SNI). The price is one more inspection of the TLS handshake;
+#   the gain is that the core sees only the traffic that was selected.
+#
+# respect-rules: false - the DNS of the core must not depend on the proxy
+# node: a lookup through a node is slow, and the node is chosen by a
+# latency test. The Russian domains still go to Yandex DNS through
+# nameserver-policy.
+dns:
+  enable: true
+  listen: 0.0.0.0:7880
+  ipv6: false
+  enhanced-mode: redir-host
+  use-hosts: true
+
+  respect-rules: false
+
+  # Yandex DNS first: it answers from inside Russia and is not throttled
+  # there. Cloudflare is the backup.
+  nameserver:
+    - https://77.88.8.8/dns-query
+    - https://1.1.1.1/dns-query
+
+  # The proxy servers themselves - direct, otherwise the subscription never
+  # loads.
+  proxy-server-nameserver:
+    - https://77.88.8.8/dns-query
+
+  # For names that must go direct - Russian DNS.
+  direct-nameserver:
+    - https://77.88.8.8/dns-query
+
+  # Russian domains resolve through Yandex DNS directly, otherwise the answer
+  # comes from outside Russia and you get the RKN stub.
+  #
+  # The key is a LOCAL rule-set, not "geosite:category-ru": the latter makes
+  # the core download GeoSite.dat and keep the geosite matcher in RAM
+  # (86 MB RSS instead of 52 MB, measured on a Cudy WR3000S).
+  nameserver-policy:
+    'rule-set:ru-domains':
+      - https://77.88.8.8/dns-query
+
+# ============================== TUN ==============================
+# The tunnel in this layout is hev-socks5-tunnel, not the TUN of the core:
+# it connects the tun device "Mihomo" with the socks5 port of the core.
+# The TUN of the core stays off - two TUNs on the same router fight each
+# other over the routing table.
+tun:
+  enable: false
+  stack: mixed
+  dns-hijack:
+    - "any:53"
+    - "tcp://any:53"
+  auto-route: true
+  auto-redirect: true
+  auto-detect-interface: true
+
+# ============================== Sniffer ==============================
+# In this layout the core gets the traffic by IP address, so the domain has
+# to be recovered from the handshake. Without the sniffer the domain rules
+# do not fire at all.
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  override-destination: false
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]
+  skip-domain:
+    - "+.push.apple.com"
+
+# ============================== Experimental ==============================
+# QUIC via GSO misbehaves on some cores - a common source of "freezes".
+experimental:
+  quic-go-disable-gso: true
+
+# =============================================================================
+#  Fragments
+# =============================================================================
+#  YAML anchors: the blocks below are defined once and reused.
+#
+#  The filters live on the GROUPS, never on the provider: OpenClash rewrites
+#  provider-level filter/exclude-filter from its own UI, which would silently
+#  disable this logic.
+# =============================================================================
+x-fragments:
+  # The probe URL for every automatic group.
+  # HTTPS, not HTTP: the probe travels through the node that is being
+  # measured, and a plain HTTP answer can be forged by anything on the way.
+  # The TLS handshake is part of the measurement - that is the point.
+  probe-url: &probe-url 'https://cp.cloudflare.com/generate_204'
+  probe-interval: &probe-interval 300
+  probe-tolerance: &probe-tolerance 50
+
+  # Nodes that must never be used as a proxy: LTE/4G servers and the
+  # subscription "info" nodes (traffic counters, expiry, tariffs).
+  # The Russian words are written as \x{...} escapes so this file stays
+  # readable in any editor.
+  # NOTE: \p{IsCyrillic} must NOT be used - it crashes mihomo v1.19.33.
+  noise-filter: &noise-filter '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439})'
+
+  # Markers of a Russian exit node. A Russian exit IP does not unblock
+  # anything, so the automatic groups exclude these nodes.
+  # The flag is written as \x{1F1F7}\x{1F1FA} (the regional indicator pair).
+  ru-filter: &ru-filter '(?i)(?:\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})'
+
+  # noise-filter + ru-filter in one pattern: the automatic groups need both.
+  # Keep the first part identical to noise-filter - scripts/selftest.sh checks
+  # that.
+  foreign-filter: &foreign-filter '(?i)(?:\bLTE\b|\b4G\b|\bMobile\b|\bMTS\b|\bBeeline\b|\bMegafon\b|\bTele2\b|\bExpires?\b|\bExpiry\b|\bTraffic\b|\bRemaining\b|\bBalance\b|\bReset\b|\bOfficial\b|\bWebsite\b|\bPanel\b|\bPromo\b|\bSubscription\b|\x{041E}\x{0441}\x{0442}\x{0430}\x{0442}\x{043E}\x{043A}|\x{0422}\x{0440}\x{0430}\x{0444}\x{0438}\x{043A}|\x{0422}\x{0430}\x{0440}\x{0438}\x{0444}|\x{041F}\x{043E}\x{0434}\x{043F}\x{0438}\x{0441}\x{043A}\x{0430}|\x{0414}\x{0435}\x{0439}\x{0441}\x{0442}\x{0432}\x{0443}\x{0435}\x{0442}|\x{041C}\x{043E}\x{0431}\x{0438}\x{043B}\x{044C}\x{043D}\x{044B}\x{0439}|\x{1F1F7}\x{1F1FA}|\bRU\b|\bRussia\b|\bRussian\b|\x{041C}\x{043E}\x{0441}\x{043A}\x{0432}\x{0430}|\x{0420}\x{043E}\x{0441}\x{0441}\x{0438}\x{044F}|\x{0421}\x{041F}\x{0431})'
+
+  # The choice list shared by the service groups.
+  service-choices: &service-choices
+    - "🚀 Auto"
+    - "🎯 Manual"
+    - DIRECT
+
+# ============================== Provider ==============================
+# Exactly one subscription. Put the URL here, or let scripts/setup-mixomo.sh
+# substitute it (SUB_URL='...' sh scripts/setup-mixomo.sh).
+proxy-providers:
+  Main:
+    type: http
+    url: 'PASTE_SUBSCRIPTION_URL_HERE'
+    path: ./proxy-providers/main.yaml
+    interval: 86400
+    proxy: DIRECT
+    health-check:
+      enable: true
+      url: 'https://cp.cloudflare.com/generate_204'
+      interval: 300
+      timeout: 3000
+      lazy: true
+      max-failed-times: 2
+
+# ============================== Rule providers ==============================
+# Format mrs with the matching behavior. All files are local
+# (/etc/mihomo/rule-files/), scripts/build-ruleset.sh creates and refreshes
+# them.
+#
+# Do not set behavior: classical with format: mrs - such a rule is silently
+# skipped by the core.
+rule-providers:
+  # --- Russia: own content -> direct ---
+  ru-domains:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/category-ru.mrs
+  ru-ips:
+    type: file
+    behavior: ipcidr
+    format: mrs
+    path: ./rule-files/ru.mrs
+
+  # --- Your own domains ---
+  # Built from lists/custom-domains.list. The rule sits above the ad list and
+  # above the RKN list, so an explicit decision of yours always wins.
+  custom-domains:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/custom-domains.mrs
+
+  # --- RKN: blocked -> through the proxy ---
+  # Local on purpose: build-ruleset.sh builds them. The RKN list ships bare
+  # domains ("instagram.com") and in mihomo a bare domain matches ONLY that
+  # exact domain - "www.instagram.com" slips through. The script adds the
+  # "+." prefix (DOMAIN-SUFFIX) before converting to mrs.
+  rkn-blocked:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/rkn-blocked.mrs
+  rkn-blocked-ips:
+    type: file
+    behavior: ipcidr
+    format: mrs
+    path: ./rule-files/rkn-blocked-ip.mrs
+  rkn-community:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/rkn-community.mrs
+
+  # --- Private networks ---
+  private:
+    type: file
+    behavior: ipcidr
+    format: mrs
+    path: ./rule-files/private.mrs
+
+  # --- CDN ---
+  # CDN hostnames of the big providers. Kept separate so that you can send
+  # them somewhere else (or straight out) with one switch.
+  cdn:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/cdn.mrs
+
+  # --- Service rule-sets ---
+  telegram:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/telegram.mrs
+  discord:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/discord.mrs
+  social:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/instagram.mrs
+  social-fb:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/facebook.mrs
+  social-tw:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/twitter.mrs
+  ai:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/category-ai-ru.mrs
+  ai-openai:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/openai.mrs
+  ai-anthropic:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/anthropic.mrs
+  ai-gemini:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/google-gemini.mrs
+  ai-grok:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/xai.mrs
+  youtube:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/youtube.mrs
+  streaming:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/netflix.mrs
+  github:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/github.mrs
+  microsoft:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/microsoft.mrs
+  apple:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/apple.mrs
+  games:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/category-games.mrs
+  steam:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/steam.mrs
+  roblox:
+    type: file
+    behavior: domain
+    format: mrs
+    path: ./rule-files/roblox.mrs
+
+  # --- Ads ---
+  # NOT loaded in this layout on purpose.
+  #
+  # The ad list is blocked by MagiTrickle itself (the group has the
+  # interface "blackhole"), so the traffic is dropped by the router and
+  # never reaches the core. That keeps ~110 000 domains out of the RAM of
+  # the core (measured: 20 MB of the 58 MB RSS of the full config on a
+  # Cudy WR3000S) and out of its rule matching.
+  #
+  # If you prefer the block to come from the core (an immediate RST
+  # instead of a timeout), uncomment the two lines below - and change the
+  # interface of the "Anti-AD" group of MagiTrickle from "blackhole" to
+  # "Mihomo", otherwise the traffic is dropped before it ever gets here.
+  #
+  # antiad:
+  #   type: file
+  #   behavior: domain
+  #   format: mrs
+  #   path: ./rule-files/anti-ad.mrs
+
+# ============================== Proxy groups ==============================
+proxy-groups:
+  # --- Entry group ---
+  # Used by the final MATCH rule.
+  - name: "🎯 Final"
+    type: select
+    proxies:
+      - "🚀 Auto"
+      - "⚡ Turbo"
+      - "🔁 Failover"
+      - "🎯 Manual"
+      - DIRECT
+
+  # --- Automatic groups ---
+  # All three exclude the Russian nodes and the LTE/info nodes.
+  - name: "🚀 Auto"
+    type: url-test
+    use:
+      - Main
+    exclude-filter: *foreign-filter
+    url: *probe-url
+    interval: *probe-interval
+    tolerance: *probe-tolerance
+    lazy: true
+
+  # Same as Auto, but every millisecond counts: it switches faster and sticks
+  # to the fastest node even if the difference is small.
+  - name: "⚡ Turbo"
+    type: url-test
+    use:
+      - Main
+    exclude-filter: *foreign-filter
+    url: *probe-url
+    interval: 120
+    tolerance: 0
+    lazy: true
+
+  # If the current node dies, switch to the next one that answers.
+  - name: "🔁 Failover"
+    type: fallback
+    use:
+      - Main
+    exclude-filter: *foreign-filter
+    url: *probe-url
+    interval: *probe-interval
+    lazy: true
+
+  # --- Manual pick ---
+  # Every node of the subscription, including the Russian ones - the old
+  # "RU Nodes" group is gone, this is its replacement.
+  - name: "🎯 Manual"
+    type: select
+    use:
+      - Main
+    exclude-filter: *noise-filter
+
+  # --- Services ---
+  - name: "💬 Telegram"
+    type: select
+    proxies: *service-choices
+
+  - name: "🎮 Discord"
+    type: select
+    proxies: *service-choices
+
+  - name: "🤖 AI"
+    type: select
+    proxies: *service-choices
+
+  - name: "▶️ YouTube"
+    type: select
+    proxies: *service-choices
+
+  - name: "🎬 Streaming"
+    type: select
+    proxies: *service-choices
+
+  - name: "🐙 GitHub"
+    type: select
+    proxies: *service-choices
+
+  - name: "📱 Social"
+    type: select
+    proxies: *service-choices
+
+  - name: "🎮 Steam"
+    type: select
+    proxies: *service-choices
+
+  - name: "🧱 Roblox"
+    type: select
+    proxies: *service-choices
+
+  - name: "🕹️ Games"
+    type: select
+    proxies: *service-choices
+
+  # --- CDN ---
+  # The CDN hostnames of the big providers. Default: through the proxy, like
+  # everything else. Switch it to DIRECT if you want to save the traffic.
+  - name: "🌐 CDN"
+    type: select
+    proxies: *service-choices
+
+  # --- Your own domains ---
+  # What happens to the domains in lists/custom-domains.list.
+  - name: "⭐ Custom"
+    type: select
+    proxies: *service-choices
+
+  # --- Blocked ---
+  # Domains from the RKN list that have no service group of their own.
+  - name: "🚫 RKN Blocked"
+    type: select
+    proxies:
+      - "🚀 Auto"
+      - "🎯 Manual"
+      - REJECT
+      - DIRECT
+
+# ============================== Rules ==============================
+# Order matters: from specific to general. Every statement here was measured,
+# see docs/DESIGN.md.
+#
+# The rules only decide what happens to the traffic that was SELECTED by
+# MagiTrickle. Everything else never reaches the core.
+rules:
+  # 1. LAN and services that must not be proxied.
+  - RULE-SET,private,DIRECT
+
+  # 2. Your own domains - the highest priority after the LAN, above the
+  #    RKN list. An explicit decision of yours wins.
+  - RULE-SET,custom-domains,⭐ Custom
+
+  # 3. Service groups - deliberately BEFORE the RKN list. Telegram, Discord
+  #    and the AI services are on the RKN list as well (measured: 13, 22 and
+  #    15 of their domains overlap). With the RKN rule first, picking a node
+  #    for those services would be unreachable.
+  - RULE-SET,telegram,💬 Telegram
+  - RULE-SET,discord,🎮 Discord
+  - RULE-SET,ai-openai,🤖 AI
+  - RULE-SET,ai-anthropic,🤖 AI
+  - RULE-SET,ai-gemini,🤖 AI
+  - RULE-SET,ai-grok,🤖 AI
+  - RULE-SET,youtube,▶️ YouTube
+  - RULE-SET,streaming,🎬 Streaming
+  - RULE-SET,github,🐙 GitHub
+  - RULE-SET,steam,🎮 Steam
+  - RULE-SET,roblox,🧱 Roblox
+  - RULE-SET,games,🕹️ Games
+  - RULE-SET,social,📱 Social
+  - RULE-SET,social-fb,📱 Social
+  - RULE-SET,social-tw,📱 Social
+
+  # 4. Blocked by RKN -> dedicated group (through the proxy by default, can
+  #    be switched to REJECT).
+  #    This block is BEFORE the Russian domains: there are domains like
+  #    007dom.ru - Russian by TLD, but on the RKN list. With ru-domains
+  #    first, such a domain would go DIRECT, i.e. straight around the block.
+  - RULE-SET,rkn-blocked,🚫 RKN Blocked
+  - RULE-SET,rkn-community,🚫 RKN Blocked
+  - RULE-SET,rkn-blocked-ips,🚫 RKN Blocked
+
+  # 5. Russian AI services -> direct. These are Russian services (Yandex
+  #    Alice and friends), a foreign exit IP is wrong for them.
+  - RULE-SET,ai,DIRECT
+
+  # 6. Russia -> direct.
+  - RULE-SET,ru-domains,DIRECT
+  - RULE-SET,ru-ips,DIRECT
+
+  # 7. Microsoft and Apple are reachable directly from Russia.
+  - RULE-SET,microsoft,DIRECT
+  - RULE-SET,apple,DIRECT
+
+  # 8. CDN -> its own group, so that you can send it somewhere else.
+  - RULE-SET,cdn,🌐 CDN
+
+  # 9. QUIC is blocked: UDP tunnels are unstable, TCP is more reliable.
+  #    This also keeps the UDP load of the core low - the QUIC packets of
+  #    the clients never enter it.
+  - AND,((DST-PORT,443),(NETWORK,UDP)),REJECT
+
+  # 10. Everything else -> the entry group.
+  - MATCH,🎯 Final
