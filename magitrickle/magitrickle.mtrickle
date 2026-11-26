@@ -1,0 +1,44 @@
+{
+  "groups": [
+    {
+      "id": "d9dce3ce",
+      "name": "⭐ Custom",
+      "color": "#ffd700",
+      "interface": "Mihomo",
+      "enable": true,
+      "rules": []
+    },
+    {
+      "id": "862d206b",
+      "name": "🎬 Streaming",
+      "color": "#e50914",
+      "interface": "Mihomo",
+      "enable": true,
+      "rules": []
+    },
+    {
+      "id": "3e61482d",
+      "name": "🤖 AI",
+      "color": "#10a37f",
+      "interface": "Mihomo",
+      "enable": true,
+      "rules": []
+    },
+    {
+      "id": "89b87e29",
+      "name": "🐙 GitHub",
+      "color": "#8b949e",
+      "interface": "Mihomo",
+      "enable": false,
+      "rules": []
+    },
+    {
+      "id": "c217a8bc",
+      "name": "🎮 Steam",
+      "color": "#66c0f4",
+      "interface": "Mihomo",
+      "enable": false,
+      "rules": []
+    }
+  ]
+}

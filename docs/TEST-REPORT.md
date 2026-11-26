@@ -72,9 +72,11 @@ findings 3-7 were found during the emulator run and are fixed in this change.
 | `06_workflows.sh` | 8 | workflow copies byte-identical, guard, apply step, CI entry point |
 | `07_install.sh` | 43 | installer syntax/POSIX, rule-set list sync, a real local HTTP install, placeholder escaping with special characters, no credentials in the log, reinstall safety, all variants, atomic failure |
 | `08_rehearsal.sh` | 27 | the whole router cycle on this machine: `install.sh` into a router-like layout, the ruby rewrite OpenClash does, the core starts, `check-groups.sh`, `update-rulesets.sh` rebuilding with the router's own core, the apply through the API without a restart, the rules still matching |
+| `09_mixomo.sh` | 67 | the mixomo scheme: `mihomo -t` on the new config, the keys mixomo needs, the paths of its layout, the state of MagiTrickle (structure, ids, interfaces, the fields the two builds read differently), the `.mtrickle` file, `gen-mtrickle.sh` rebuilding a state file from the rule-sets, POSIX syntax of the three new scripts |
+| `10_mixomo_rehearsal.sh` | 24 | the installation of the scheme on this machine: `setup-mixomo.sh` installs the config, the 28 rule-sets, the scripts and the state of MagiTrickle from a local copy of the repository, the placeholders are substituted, a second run keeps the own list, the password does not reach the log |
 
 `scripts/selftest.sh` also passes with the real core. The CI (non-router)
-part of `tests/run-all.sh` is now 165 checks; the optional router cycle adds
+part of `tests/run-all.sh` is now 257 checks; the optional router cycle adds
 13 more.
 
 `08_rehearsal.sh` is the suite that found findings 8 and 9: it runs the
@@ -130,12 +132,97 @@ and the subscription URL verbatim, marked the scripts executable and skipped
 * Wrong dashboard password: `check-groups.sh` now exits 1 with an explicit
   error instead of reporting false `OK`.
 
+## The mixomo scheme
+
+The second layout of this repository sends only the **selected** traffic
+through the core: MagiTrickle answers the DNS, marks the addresses of its
+lists, and only the marked traffic goes into the core (through the tun
+device of hev-socks5-tunnel). Everything else goes to the provider at the
+full speed of the line.
+
+The scheme itself is not ours - it is
+[Internet-Helper/mixomo-openwrt](https://github.com/Internet-Helper/mixomo-openwrt)
+with MagiTrickle. What was done here is the config for it: the config of the
+core, the state of MagiTrickle and the scripts that install the whole thing
+on the router.
+
+### What the sources of the projects say (checked, not guessed)
+
+| Fact | Where it comes from |
+|---|---|
+| `mixed-port` has to be 7890; the installer keeps a config that has it and overwrites one that has not | `src/components/mihomo/install.sh` of mixomo |
+| the rule-sets belong in `/etc/mihomo/rule-files`, the providers in `/etc/mihomo/proxy-providers` | `src/lib/paths.sh`, `src/runtime/ucode/install.sh` |
+| the tunnel is `hev-socks5-tunnel` with the tun device named `Mihomo` and the socks5 port 7890 | `src/components/hev/install.sh` |
+| the DNS of the core listens on `0.0.0.0:7880` | `src/assets/config/mihomo.yaml` |
+| the state of MagiTrickle is `/etc/magitrickle/state/config.yaml`, the groups have the interface `Mihomo` or `TPROXY`, the state needs `configVersion` | `src/components/magitrickle/install.sh`, `src/assets/magitrickle/groups-*.yaml` |
+| a group with the interface `blackhole` drops the traffic in the router, without the core | `src/backend/utils/netfilterTools/ipset-to-link.go` |
+| a domain rule of MagiTrickle covers the domain and its subdomains; a subscription is a plain list of domains or CIDR | `src/backend/subscriptions/parse.go` |
+| the web interface exports and imports the groups as `.mtrickle` (JSON) | `src/frontend/src/modules/groups/GroupsView.svelte` |
+
+### Decisions that the sources forced
+
+1. **`mixed-port: 7890`, not 7893.** Not a matter of taste: the installer of
+   mixomo keeps the config of the router only when it contains that port, and
+   replaces it with the default one otherwise.
+2. **`enhanced-mode: redir-host`, not fake-ip.** With fake-ip the client gets
+   an address of 198.18.0.0/16 and sends **all** of its traffic there. Only
+   the addresses that MagiTrickle marked go into the core; the rest would
+   leave the router towards a fake address and never arrive. fake-ip would
+   force "everything through the core" - the exact problem this layout is
+   meant to solve. With redir-host the client gets a real address, and the
+   core recovers the domain from the TLS handshake (the sniffer is on).
+3. **The ad list is not in the core.** It has 110 000 domains and costs about
+   20 MB of the RAM of the core. MagiTrickle drops it itself
+   (`interface: blackhole`), so the core neither sees the traffic nor keeps
+   the list in its memory. The price is a timeout instead of an immediate
+   RST; `RU-Mihomo-mixomo.yaml` says how to get the fast answer back.
+4. **`configVersion: "0.1.4"`.** The mod build of MagiTrickle accepts only
+   `0.1.*`, the original build accepts anything that starts with `0.`. One
+   value has to work with both.
+5. **The fields the two builds read differently are not set.** `timeout` is a
+   duration in the original build (`5s`) and milliseconds in the mod build
+   (`5000`); `additionalTTL` is a duration in one and a number of seconds in
+   the other. A value that fits one build is wrong for the other, so the
+   default of the build is used.
+6. **The local groups are built from the rule-sets of the core.** The core
+   can convert its own `.mrs` back to text (`mihomo convert-ruleset domain
+   mrs <file> <out>`), so Netflix, the AI services, GitHub and Steam come
+   from the same lists the core uses - one source of truth.
+7. **The lists of the subscriptions are plain.** MagiTrickle parses one
+   domain (or one CIDR) per line. The anti-AD list turned out to be plain
+   too (`anti-ad-domains.txt`, 110 923 lines), and the Re-filter lists are
+   plain as well - so all of them work as a subscription.
+
+### What was verified here
+
+* `mihomo -t` on `RU-Mihomo-mixomo.yaml` with the real core (v1.19.33).
+* The core starts with that config and listens on 7890, 5001, 7880 and 9090.
+* `gen-mtrickle.sh` builds a state file from the rule-sets of this
+  repository: 24 domains for Streaming, 50 for AI, 66 for GitHub, 61 for
+  Steam, the subscriptions untouched, every id eight hex characters.
+* The state file and the `.mtrickle` file are parsed by ruby and python and
+  match the schema of MagiTrickle (the ids, the interfaces, the enable
+  flags, the urls of the subscriptions).
+* The three new scripts pass `sh -n` and contain no bash syntax.
+
+### What could not be verified here
+
+The router is not reachable from the machine this was written on, so the
+following are still open and have to be measured on the device:
+
+* the RAM of MagiTrickle with the 200 000 rules of the lists;
+* whether the addresses of the marked traffic really leave the router
+  through the tunnel (the `ip route show table 1298229097` check);
+* the speed and the UDP behaviour with and without the scheme - the whole
+  point of it.
+
 ## Documentation status
 
 `README.md` / `README-RU.md`, `docs/DESIGN.md` / `DESIGN-RU.md`,
 `docs/INSTALL.md` / `INSTALL-RU.md`, `docs/GROUPS.md` / `GROUPS-RU.md`,
-`docs/RULESETS.md` / `RULESETS-RU.md` and this report are complete EN/RU
-pairs with matching section counts. The installation guide covers the whole
-cycle (install, config, subscription, start, rule-set refresh, apply, check),
-troubleshooting and verification. `AGENTS.md` contains 15 rules, the DNS
-scheme, the node filters and instructions for AI agents.
+`docs/RULESETS.md` / `RULESETS-RU.md`, `docs/MIXOMO.md` / `MIXOMO-RU.md` and
+this report are complete EN/RU pairs with matching section counts. The
+installation guide covers the whole cycle (install, config, subscription,
+start, rule-set refresh, apply, check), troubleshooting and verification.
+`AGENTS.md` contains 24 rules, the DNS scheme, the node filters and
+instructions for AI agents.

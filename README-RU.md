@@ -112,6 +112,41 @@ Lite-вариант существует потому, что список ре�
 ./scripts/make-lite.sh && ./scripts/make-smart.sh
 ```
 
+## Схема mixomo (через ядро идёт только выбранное)
+
+В раскладке выше через ядро идёт **весь** трафик клиентов: для каждого
+пакета сверяются правила, отслеживаются соединения, DNS отвечает ядром.
+Поэтому падает скорость и теряются UDP-пакеты.
+
+Схема mixomo решает обе проблемы: через ядро идёт **только выбранное**.
+
+```
+клиент -> MagiTrickle (DNS, помечает адреса из своих списков)
+       -> hev-socks5-tunnel (tun "Mihomo")
+       -> mihomo (mixed-port 7890) -> узел
+```
+
+Всё, чего нет в списках, идёт к провайдеру на полной скорости линии и ядро
+не видит вообще.
+
+| Файл | |
+|---|---|
+| `RU-Mihomo-mixomo.yaml` | конфиг ядра под эту раскладку |
+| `magitrickle/magitrickle.yaml` | состояние MagiTrickle: группы и подписки |
+| `magitrickle/magitrickle.mtrickle` | те же группа в JSON-формате веб-интерфейса |
+| `scripts/setup-mixomo.sh` | ставит схему на роутер |
+| `scripts/gen-mtrickle.sh` | пишет состояние MagiTrickle по rule-set'ам |
+| `scripts/update-mixomo.sh` | ежедневное обновление rule-set'ов |
+
+```sh
+curl -fsSL https://github.com/Internet-Helper/mixomo-openwrt/raw/main/install.sh | sh
+curl -fsSL -o /tmp/setup-mixomo.sh \
+  https://raw.githubusercontent.com/Frog2233-DevOps/Mihomo-personal-config/main/scripts/setup-mixomo.sh
+SUB_URL='...' DASHBOARD_PASSWORD='...' sh /tmp/setup-mixomo.sh
+```
+
+Подробности схемы, списков и проверок - в `docs/MIXOMO-RU.md`.
+
 ## Плейсхолдеры
 
 Задать надо две вещи, всё остальное уже имеет рабочие значения:
@@ -144,6 +179,10 @@ Lite-вариант существует потому, что список ре�
 | `scripts/update-rulesets.sh` | запуск на роутере: пересобирает ruleset'ы своим же ядром, ставит их и применяет - списки обновляются сами |
 | `scripts/apply-rulesets.sh` | запуск на роутере: говорит работающему ядру перечитать конфиг (через API, без перезапуска) |
 | `scripts/fix-exec.sh`, `scripts/fix-exec.ps1` | mark the scripts as executable (bash and PowerShell) |
+| `scripts/setup-mixomo.sh` | ставит схему mixomo на роутер: конфиг, rule-set'ы, состояние MagiTrickle, cron и проверки |
+| `scripts/gen-mtrickle.sh` | пишет состояние MagiTrickle по rule-set'ам и по своему списку |
+| `scripts/update-mixomo.sh` | на роутере: пересобирает rule-set'ы и состояние MagiTrickle и перезагружает ядро |
+| `magitrickle/magitrickle.yaml`, `magitrickle/magitrickle.mtrickle` | группы и подписки MagiTrickle для схемы mixomo |
 | `scripts/selftest.sh` | `mihomo -t` каждого конфига + проверки фильтров, групп и файлов |
 | `tests/run-all.sh` | полный набор регрессионных тестов (конфиги, нормализатор, скрипты, доки, воркфлоу); `tests/08_rehearsal.sh` гоняет весь цикл роутера локально на настоящем ядре, `tests/04_cycle.sh` проверяет его на реальном роутере |
 | `docs/DESIGN-RU.md` | почему принято каждое решение, с замерами |
