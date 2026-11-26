@@ -43,7 +43,11 @@ traffic goes there, and the rest goes straight to the provider.
 
 ## What the scheme changes in the config
 
-| | `RU-Mihomo.yaml` (OpenClash) | `RU-Mihomo-mixomo.yaml` |
+The first column is the OpenClash layout - it is not in `main` any more, it is
+archived in the branch `legacy/openclash`. The comparison is here to show what
+the scheme had to change and why.
+
+| | the OpenClash layout (`legacy/openclash`) | `RU-Mihomo-mixomo.yaml` |
 |---|---|---|
 | `mixed-port` | 7893 | **7890** - the socks5 port of the tunnel, and the value mixomo checks |
 | `redir-port` | - | 5001 - the transparent port of the core |
@@ -92,6 +96,12 @@ of MagiTrickle from `blackhole` to `Mihomo`.
 | `scripts/setup-mixomo.sh` | installs the scheme on the router |
 | `scripts/gen-mtrickle.sh` | writes the state of MagiTrickle from the rule-sets |
 | `scripts/update-mixomo.sh` | the daily refresh of the rule-sets |
+| `scripts/apply-rulesets.sh` | tells the running core to read the new files |
+| `scripts/check-groups.sh` | what ended up in every group of the core |
+| `scripts/bypass-ports.sh`, `scripts/mixomo-bypass.init` | keep the traffic of the listed ports out of the core |
+| `scripts/build-ruleset.sh` | builds the rule-sets from the upstream lists |
+| `scripts/selftest.sh`, `scripts/selftest.py` | `mihomo -t`, `shellcheck` and the consistency checks |
+| `AGENTS.md` | the rules that must not be broken |
 
 ## Installation
 

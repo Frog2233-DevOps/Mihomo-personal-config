@@ -12,22 +12,25 @@
 #
 #  Environment variables:
 #      API      - address of the mihomo API (default: 127.0.0.1:9090)
-#      SECRET   - dashboard password (default: from /etc/openclash/secret)
+#      CONFIG   - the config of the scheme  (default: /etc/mihomo/config.yaml)
+#      SECRET   - dashboard password (default: from the config)
 #
 #  Only busybox tools are used, so it runs on OpenWrt as it is.
 # =============================================================================
 
 API="${API:-127.0.0.1:9090}"
+CONFIG="${CONFIG:-/etc/mihomo/config.yaml}"
 SECRET="${SECRET:-}"
 
-if [ -z "$SECRET" ] && [ -f /etc/openclash/secret ]; then
-  SECRET="$(cat /etc/openclash/secret 2>/dev/null)"
+# The secret is in the config of the scheme - the core is started with it.
+if [ -z "$SECRET" ] && [ -f "$CONFIG" ]; then
+  SECRET="$(sed -n "s/^secret:[ \t]*['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}[ \t]*$/\1/p" "$CONFIG" 2>/dev/null | head -1)"
 fi
 
 TMP="/tmp/oc_groups.$$.json"
 trap 'rm -f "$TMP"' EXIT
 
-# OpenClash installs curl as a dependency, but a plain OpenWrt has only
+# The downloader. mixomo installs curl, but a plain OpenWrt has only
 # uclient-fetch - use whatever is there.
 if command -v curl >/dev/null 2>&1; then
   if [ -n "$SECRET" ]; then
@@ -48,7 +51,7 @@ fi
 
 if [ ! -s "$TMP" ]; then
   echo "ERROR: no answer from http://$API/proxies"
-  echo "       Is OpenClash running? Is the dashboard password set?"
+  echo "       Is the core running? Is the dashboard password set?"
   exit 1
 fi
 # A 401 body is a non-empty answer too. Without this check every group is
@@ -121,10 +124,49 @@ show() { # show <group name>
 }
 
 echo "=== Proxy groups ==="
-for g in "🎯 Final" "🚀 Auto" "⚡ Turbo" "🔁 Failover" "🎯 Manual" \
-         "💬 Telegram" "🎮 Discord" "🤖 AI" "▶️ YouTube" "🎬 Streaming" \
-         "🐙 GitHub" "📱 Social" "🎮 Steam" "🧱 Roblox" "🕹️ Games" \
-         "🌐 CDN" "⭐ Custom" "🚫 RKN Blocked"; do
+# The groups are read out of the config of the scheme, so a new group in it is
+# shown without touching this script. The built-in list is the fallback.
+groups_of_config() {
+  [ -f "$CONFIG" ] || return 1
+  awk '
+    /^proxy-groups:/ { p = 1; next }
+    p && /^[^[:space:]]/ { p = 0 }
+    p && /^[[:space:]]*-[[:space:]]*name:/ {
+      n = $0
+      sub(/^[^:]*:[[:space:]]*/, "", n)
+      gsub(/^["'"'"']|["'"'"']$/, "", n)
+      print n
+    }
+  ' "$CONFIG"
+}
+
+# The list of the groups. The name of the variable is not GROUPS: that is a
+# builtin of the shell (the list of the gids of the user), and assigning a
+# string to it breaks the shell.
+GROUP_LIST="$(groups_of_config)"
+if [ -z "$GROUP_LIST" ]; then
+  GROUP_LIST="🎯 Final
+🚀 Auto
+⚡ Turbo
+🔁 Failover
+🎯 Manual
+💬 Telegram
+🎮 Discord
+🤖 AI
+▶️ YouTube
+🎬 Streaming
+🐙 GitHub
+📱 Social
+🎮 Steam
+🧱 Roblox
+🕹️ Games
+🌐 CDN
+⭐ Custom
+🚫 RKN Blocked"
+fi
+
+printf '%s\n' "$GROUP_LIST" | while IFS= read -r g; do
+  [ -n "$g" ] || continue
   show "$g"
 done
 

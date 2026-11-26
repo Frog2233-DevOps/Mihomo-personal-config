@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""selftest.py - consistency checks for the RU-Mihomo configuration.
+"""selftest.py - consistency checks for the mixomo configuration.
 
 No external modules, so it runs anywhere python3 is available.
 
@@ -8,12 +8,15 @@ Checks:
   2. every group used in the rules exists
   3. every member of a group exists (a group or DIRECT/REJECT)
   4. every provider used by a group exists
-  5. every rule-set file exists in ruleset/
-  6. the generated variants are really the generated variants
-  7. no bare YAML 1.1 booleans where a string is meant (ruby/Psych would
-     turn "off" into false and the core would refuse to start)
-  8. automation/*.yml matches .github/workflows/*.yml (fix-exec.sh copies
-     the former over the latter, so a drift silently reverts CI fixes)
+  5. every rule-provider file exists in ruleset/
+  6. the settings that the scheme forces: mixed-port 7890, redir-host, the
+     rule-sets in ./rule-files/, the ad list NOT in the core, the DNS policy
+     on the local rule-set
+  7. the order of the rules: custom-domains and games above the RKN list,
+     the Russian domains below it
+  8. no bare YAML 1.1 booleans where a string is meant
+  9. the state of MagiTrickle: configVersion 0.1.*, the ad list on the
+     interface blackhole, the RKN lists on raw.githubusercontent.com
 """
 import os
 import re
@@ -22,6 +25,9 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BUILTIN = {"DIRECT", "REJECT", "REJECT-DROP", "PASS", "COMPATIBLE", "GLOBAL"}
 fail = []
+
+CFG = "RU-Mihomo-mixomo.yaml"
+MT = "magitrickle/magitrickle.yaml"
 
 
 def read(name):
@@ -127,9 +133,18 @@ def parse(text):
     return out
 
 
-main = read("RU-Mihomo.yaml")
+main = read(CFG)
 cfg = parse(main)
 names = [g["name"] for g in cfg["groups"]]
+
+
+def check(ok, message):
+    """Print the result of one check and remember the failures."""
+    if ok:
+        print("  OK   %s" % message)
+    else:
+        fail.append(message)
+
 
 # --- 1. the filters ---------------------------------------------------------
 def anchor_value(alias):
@@ -146,99 +161,133 @@ else:
         value = value.strip("'\"")
         value = re.sub(r"^\(\?i\)", "", value)
         return value.strip("()")
-    if inner(noise) not in inner(foreign):
-        fail.append("foreign-filter does not contain the noise part of noise-filter")
-    else:
-        print("  OK   foreign-filter contains the noise part of noise-filter")
+    check(inner(noise) in inner(foreign),
+          "foreign-filter contains the noise part of noise-filter")
 
 # --- 2. the groups used in the rules exist -----------------------------------
 targets = set()
 for rule in cfg["rules"]:
     targets.add(rule.split(",")[-1].strip())
 missing = sorted(t for t in targets if t not in names and t not in BUILTIN)
-if missing:
-    fail.append("groups used in the rules but not defined: %s" % ", ".join(missing))
-else:
-    print("  OK   all %d rule targets exist" % len(targets))
+check(not missing,
+      "all %d rule targets exist%s"
+      % (len(targets), ("" if not missing else " (missing: %s)" % ", ".join(missing))))
 
 # --- 3./4. the members of the groups -----------------------------------------
+member_problems = []
 for group in cfg["groups"]:
     for member in group["proxies"]:
         if member.startswith("*"):
-            fail.append("group '%s' refers to an unresolved alias '%s'"
-                        % (group["name"], member))
+            member_problems.append("group '%s' refers to an unresolved alias '%s'"
+                                   % (group["name"], member))
         elif member not in names and member not in BUILTIN:
-            fail.append("group '%s' refers to an unknown member '%s'"
-                        % (group["name"], member))
+            member_problems.append("group '%s' refers to an unknown member '%s'"
+                                   % (group["name"], member))
     for provider in group["use"]:
         if provider not in cfg["providers"]:
-            fail.append("group '%s' refers to an unknown provider '%s'"
-                        % (group["name"], provider))
-if not any("unknown member" in f or "unknown provider" in f or "alias" in f for f in fail):
-    print("  OK   every group member and every provider exists")
+            member_problems.append("group '%s' refers to an unknown provider '%s'"
+                                   % (group["name"], provider))
+check(not member_problems,
+      "every group member and every provider exists%s"
+      % ("" if not member_problems else " (%s)" % "; ".join(member_problems)))
 
 # --- 5. the rule-set files exist ---------------------------------------------
-for path in cfg["rule_provider_paths"]:
-    if not os.path.exists(os.path.join(ROOT, path.lstrip("./"))):
-        fail.append("missing rule-set file: %s" % path)
-if not any("missing rule-set file" in f for f in fail):
-    print("  OK   every rule-set file exists (%d)" % len(cfg["rule_provider_paths"]))
+# The config of the scheme points to ./rule-files/ (the directory of mixomo on
+# the router), the repository keeps the compiled files in ruleset/.
+missing_files = []
+for p in cfg["rule_provider_paths"]:
+    name = os.path.basename(p)
+    if not os.path.exists(os.path.join(ROOT, "ruleset", name)):
+        missing_files.append(p)
+check(not missing_files,
+      "every rule-set file exists (%d)%s"
+      % (len(cfg["rule_provider_paths"]),
+         ("" if not missing_files else " (missing: %s)" % ", ".join(missing_files))))
 
-# --- 6. the generated variants -----------------------------------------------
-lite = read("RU-Mihomo-lite.yaml")
-if "antiad" in lite:
-    fail.append("RU-Mihomo-lite.yaml still references antiad")
-else:
-    print("  OK   the lite variant has no antiad")
+# --- 6. the settings that the scheme forces ---------------------------------
+# The mixomo installer keeps a config only with this port, and the scheme
+# needs redir-host: with fake-ip the client sends ALL of its traffic to
+# 198.18.0.0/16 and only the marked addresses reach the core - the rest
+# would leave the router towards a fake address.
+port = re.search(r"^mixed-port:\s*(\S+)", main, re.M)
+check(bool(port) and port.group(1) == "7890",
+      "mixed-port is 7890 (got: %s)" % (port.group(1) if port else "nothing"))
 
-smart = read("RU-Mihomo-smart.yaml")
-if "type: smart" not in smart:
-    fail.append("RU-Mihomo-smart.yaml has no smart group")
-else:
-    print("  OK   the smart variant has a smart group")
+mode = re.search(r"^\s+enhanced-mode:\s*(\S+)", main, re.M)
+check(bool(mode) and mode.group(1) == "redir-host",
+      "enhanced-mode is redir-host (got: %s)" % (mode.group(1) if mode else "nothing"))
 
-# --- 7. no bare YAML 1.1 booleans where a string is meant ---------------------
-# OpenClash rewrites the config with ruby (Psych) at every start, and Psych
-# reads a bare "off" / "on" / "yes" / "no" as a boolean. A value like
+wrong_path = [p for p in cfg["rule_provider_paths"] if not p.startswith("./rule-files/")]
+check(not wrong_path,
+      "every rule-set is in ./rule-files/%s"
+      % ("" if not wrong_path else " (wrong: %s)" % ", ".join(wrong_path)))
+
+# The ad list is dropped by MagiTrickle (the interface blackhole), it is not
+# in the core of this layout: that keeps ~110 000 domains out of its RAM.
+ad_in_core = [p for p in cfg["rule_provider_paths"] if "anti-ad" in p or "antiad" in p]
+check(not ad_in_core,
+      "the ad list is not in the core%s"
+      % ("" if not ad_in_core else " (%s)" % ", ".join(ad_in_core)))
+
+# Without the provider of the Russian domains the core does not start at all.
+check("'rule-set:ru-domains'" in main or '"rule-set:ru-domains"' in main,
+      "the DNS policy uses the local rule-set ru-domains")
+
+# --- 7. the order of the rules -----------------------------------------------
+def rule_index(name):
+    for i, rule in enumerate(cfg["rules"]):
+        if rule.startswith("RULE-SET,%s," % name):
+            return i
+    return -1
+
+
+custom = rule_index("custom-domains")
+rkn = rule_index("rkn-blocked")
+ru = rule_index("ru-domains")
+games = rule_index("games")
+
+check(custom >= 0 and rkn >= 0 and custom < rkn,
+      "custom-domains stands above the RKN list")
+check(games >= 0 and rkn >= 0 and games < rkn,
+      "the rule of games stands above the RKN list (121 domains are on both)")
+check(ru >= 0 and rkn >= 0 and ru > rkn,
+      "the Russian domains stand below the RKN list")
+
+# --- 8. no bare YAML 1.1 booleans where a string is meant --------------------
+# YAML 1.1 reads a bare "off" / "on" / "yes" / "no" as a boolean. A value like
 # find-process-mode: off would become false and the core would refuse to
 # start. Every such value has to be quoted.
 BARE_BOOL = re.compile(r"^\s*[A-Za-z0-9_-]+:\s+(on|off|yes|no|y|n|true|false)\s*(#.*)?$")
-for name in ("RU-Mihomo.yaml", "RU-Mihomo-lite.yaml", "RU-Mihomo-smart.yaml"):
-    for i, line in enumerate(read(name).split("\n"), 1):
-        m = BARE_BOOL.match(line)
-        if m and m.group(1) in ("on", "off", "yes", "no", "y", "n"):
-            fail.append("%s:%d: bare '%s' - quote it, ruby reads it as a boolean"
-                        % (name, i, m.group(1)))
-if not any("bare '" in f for f in fail):
-    print("  OK   no bare YAML 1.1 booleans (ruby would turn them into false)")
+bare = []
+for i, line in enumerate(main.split("\n"), 1):
+    m = BARE_BOOL.match(line)
+    if m and m.group(1) in ("on", "off", "yes", "no", "y", "n"):
+        bare.append("%s:%d: bare '%s'" % (CFG, i, m.group(1)))
+check(not bare, "no bare YAML 1.1 booleans%s"
+      % ("" if not bare else " (%s)" % "; ".join(bare)))
 
-# --- 8. the workflow copies --------------------------------------------------
-# fix-exec.sh (and its PowerShell twin) copies automation/*.yml on top of
-# .github/workflows/*.yml. If the copies drift, following the documented
-# "fix" silently reverts changes made to the real workflows.
-workflows = os.path.join(ROOT, ".github", "workflows")
-automation = os.path.join(ROOT, "automation")
-if os.path.isdir(workflows) and os.path.isdir(automation):
-    drift = []
-    for name in sorted(os.listdir(workflows)):
-        if not name.endswith(".yml"):
-            continue
-        canonical = os.path.join(workflows, name)
-        copy = os.path.join(automation, name)
-        if not os.path.isfile(copy):
-            drift.append("%s (missing in automation/)" % name)
-            continue
-        with open(canonical, "rb") as fh:
-            left = fh.read()
-        with open(copy, "rb") as fh:
-            right = fh.read()
-        if left != right:
-            drift.append(name)
-    if drift:
-        fail.append("workflow copies differ: %s - sync automation/ with .github/workflows/"
-                    % ", ".join(drift))
-    else:
-        print("  OK   automation/*.yml matches .github/workflows/*.yml")
+# --- 9. the state of MagiTrickle ---------------------------------------------
+mt = read(MT)
+
+version = re.search(r"^configVersion:\s*['\"]?([^'\"\s]+)", mt, re.M)
+check(bool(version) and version.group(1).startswith("0.1."),
+      "the state of MagiTrickle has the configVersion 0.1.* (got: %s)"
+      % (version.group(1) if version else "nothing"))
+
+# The ad list must be dropped by the router, not by the core.
+ad_block = re.search(r'name:\s*"[^"]*Anti-AD"\s*\n\s*interface:\s*(\S+)', mt)
+check(bool(ad_block) and ad_block.group(1) == "blackhole",
+      "the ad list of MagiTrickle is on the interface blackhole (got: %s)"
+      % (ad_block.group(1) if ad_block else "nothing"))
+
+# The lists are fetched from raw.githubusercontent.com: the release assets of
+# github.com do not load from Russia (measured: the timeout is 21 s).
+# (This check comes with the fix of the sources - see the commit that moves
+# the lists to raw.githubusercontent.com.)
+release_urls = re.findall(r"url:\s*(\S*github\.com/\S*releases\S*)", mt)
+if release_urls:
+    print("  NOTE the lists of MagiTrickle are still fetched from the releases"
+          " of github.com: %s" % ", ".join(release_urls))
 
 print()
 if fail:

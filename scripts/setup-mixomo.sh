@@ -220,7 +220,7 @@ fi
 for r in $RULESETS; do
   cp "$TMP/ruleset/$r.mrs" "$MIHOMO_DIR/rule-files/$r.mrs" || fail "cannot install rule-files/$r.mrs"
 done
-log "$(ls -1 "$MIHOMO_DIR/rule-files"/*.mrs | wc -l | tr -d ' ') rule-sets installed"
+log "$(find "$MIHOMO_DIR/rule-files" -maxdepth 1 -name '*.mrs' | wc -l | tr -d ' ') rule-sets installed"
 
 cp "$TMP/magitrickle.yaml" "$MIHOMO_DIR/magitrickle.yaml" || fail "cannot install the MagiTrickle template"
 

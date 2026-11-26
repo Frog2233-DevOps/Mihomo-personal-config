@@ -24,23 +24,6 @@ jobs:
           chmod +x mihomo
           ./mihomo -v
 
-      - name: Download the smart core
-        run: |
-          set -e
-          # the name of the asset contains the commit, so it has to be looked up.
-          # A rate limit of the GitHub API must not fail the whole check.
-          url=$(curl -fsSL "https://api.github.com/repos/vernesong/mihomo/releases/tags/Prerelease-Alpha" 2>/dev/null \
-                | grep -o '"browser_download_url": *"[^"]*linux-amd64-alpha-smart[^"]*\.gz"' \
-                | head -1 | cut -d'"' -f4 || true)
-          if [ -z "$url" ]; then
-            echo "no smart core found (or the API rate limited us) - the smart variant is not checked"
-            exit 0
-          fi
-          curl -fsSL -o mihomo-smart.gz "$url"
-          gunzip -f mihomo-smart.gz
-          chmod +x mihomo-smart
-          ./mihomo-smart -v
-
       - name: Build the rule-sets
         run: bash ./scripts/build-ruleset.sh
 
@@ -48,7 +31,6 @@ jobs:
         run: bash ./scripts/selftest.sh
         env:
           MIHOMO: ./mihomo
-          MIHOMO_SMART: ./mihomo-smart
 
       - name: Full test suite
         run: bash ./tests/run-all.sh

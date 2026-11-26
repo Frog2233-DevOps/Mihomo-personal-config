@@ -1,8 +1,6 @@
 # =============================================================================
 #  RU-Mihomo-mixomo.yaml - mihomo configuration for the mixomo scheme
 # =============================================================================
-#  Same config as RU-Mihomo.yaml, but for the mixomo-openwrt layout:
-#
 #      MagiTrickle -> hev-socks5-tunnel (tun "Mihomo") -> mihomo
 #
 #  In this layout the traffic does NOT go through the core by default.
@@ -13,7 +11,7 @@
 #  the speed loss and the UDP timeouts of the "everything through the
 #  core" layout do not happen here.
 #
-#  Differences from RU-Mihomo.yaml (and why):
+#  The settings that the scheme forces (and why):
 #
 #    mixed-port: 7890   - required by mixomo (it is the socks5 port of the
 #                          hev-socks5-tunnel) and by the installer, which
@@ -29,8 +27,7 @@
 #
 #  Where to read what:
 #    docs/MIXOMO.md   - the scheme, the installation, the checks
-#    docs/DESIGN.md   - every decision and the measurement behind it
-#    docs/GROUPS.md   - what each proxy group is for
+#    docs/MIXOMO-RU.md - the same in Russian
 #
 #  The file is installed to /etc/mihomo/config.yaml by
 #  scripts/setup-mixomo.sh. Do not edit it on the router: the script
@@ -71,10 +68,10 @@ keep-alive-idle: 600
 # no PROCESS-NAME rules in this config. "off" saves the lookup.
 #
 # The quotes are not decoration. YAML 1.1 reads a bare "off" as the boolean
-# false - and OpenClash rewrites this file with ruby (Psych) at every start.
-# Unquoted, the value would become "false" and the core would refuse to
-# start with "invalid find process mode". Measured: ruby round-trip of the
-# config turns the bare value into false, the quoted one survives.
+# false, and the file travels through the installer (which substitutes the
+# placeholders) and through the readers of the state. Unquoted, a YAML 1.1
+# reader would turn the value into false and the core would refuse to start
+# with "invalid find process mode".
 find-process-mode: 'off'
 
 # Remember the group selection across restarts.
@@ -205,9 +202,10 @@ experimental:
 # =============================================================================
 #  YAML anchors: the blocks below are defined once and reused.
 #
-#  The filters live on the GROUPS, never on the provider: OpenClash rewrites
-#  provider-level filter/exclude-filter from its own UI, which would silently
-#  disable this logic.
+#  The filters live on the GROUPS, never on the provider. A provider-level
+#  filter would hit every group that uses the provider, and the groups need
+#  different filters: the automatic groups exclude the Russian nodes, the
+#  manual group keeps them.
 # =============================================================================
 x-fragments:
   # The probe URL for every automatic group.
@@ -559,7 +557,7 @@ proxy-groups:
 
 # ============================== Rules ==============================
 # Order matters: from specific to general. Every statement here was measured,
-# see docs/DESIGN.md.
+# see docs/MIXOMO.md.
 #
 # The rules only decide what happens to the traffic that was SELECTED by
 # MagiTrickle. Everything else never reaches the core.
