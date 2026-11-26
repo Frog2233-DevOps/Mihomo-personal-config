@@ -171,7 +171,7 @@ if [ -n "$MIHOMO" ]; then
   mkdir -p "$TMPDIR_TEST/mt"
   if MIHOMO="$MIHOMO" RULE_DIR="$ROOT/ruleset" \
      CUSTOM_LIST="$ROOT/lists/custom-domains.list" \
-     TEMPLATE="$ROOT/$MT" OUT="$TMPDIR_TEST/mt/config.yaml" \
+     TEMPLATE="$ROOT/$MT" OUT="$TMPDIR_TEST/mt/config.yaml" PROBE=0 \
      sh scripts/gen-mtrickle.sh >"$TMPDIR_TEST/mt.log" 2>&1; then
     ok "gen-mtrickle.sh runs"
   else
@@ -214,7 +214,8 @@ else
 fi
 
 section "8. the scripts are POSIX sh and pass the syntax check"
-for s in scripts/gen-mtrickle.sh scripts/setup-mixomo.sh scripts/update-mixomo.sh scripts/bypass-ports.sh; do
+for s in scripts/gen-mtrickle.sh scripts/setup-mixomo.sh scripts/update-mixomo.sh scripts/bypass-ports.sh \
+         scripts/mixomo-ram.sh scripts/mixomo-memlimit.sh scripts/mixomo-ipv6.sh; do
   if sh -n "$s" 2>/dev/null; then ok "$s passes sh -n"; else bad "$s has a syntax error"; fi
   # "[[" is bash. The character class "[[:space:]]" of sed is not - the
   # difference is the colon right after the brackets.
@@ -247,6 +248,14 @@ has scripts/setup-mixomo.sh "config.yaml.bak"
 has scripts/setup-mixomo.sh "rule-files"
 has scripts/setup-mixomo.sh "update-mixomo.sh"
 has scripts/setup-mixomo.sh "PASTE_SUBSCRIPTION_URL_HERE"
+# The memory of the scheme.
+has scripts/setup-mixomo.sh "MAX_DOMAINS"
+has scripts/setup-mixomo.sh "ANTI_AD"
+has scripts/setup-mixomo.sh "MIN_RAM_MB"
+has scripts/setup-mixomo.sh "mixomo-memlimit.sh"
+has scripts/setup-mixomo.sh "mixomo-ram.sh"
+has scripts/gen-mtrickle.sh "MAX_DOMAINS"
+has scripts/gen-mtrickle.sh "GROUP_CUSTOM"
 # The rule-set list of the script has to match the repository.
 repo_rs=$(ls -1 ruleset/*.mrs | wc -l | tr -d ' ')
 script_rs=$(grep -A3 '^RULESETS=' scripts/setup-mixomo.sh | tr -s ' \n' '\n' | grep -c '\.mrs' || true)

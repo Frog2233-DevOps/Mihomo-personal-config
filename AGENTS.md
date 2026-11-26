@@ -201,6 +201,24 @@ These are not style preferences, each of them has a reason that was measured.
     the state file is written by `scripts/gen-mtrickle.sh` from the value
     `IPV6` (`auto` by default: only when the router has IPv6). The router
     knows better than the template what it can do.
+28. **The memory of the router is the limit of the scheme.** The daemon of
+    MagiTrickle keeps every domain of every list in its RAM - about 13 kB for
+    every domain (measured on a router with 239 MB: 1 000 domains - 27 MB of
+    RSS, 5 000 - 79 MB, 10 000 - killed by the oom-killer of the kernel, and
+    the core dies with it). `scripts/gen-mtrickle.sh` counts the domains of
+    the local groups and the lines of the lists (the size is checked with
+    `curl`, the list is not downloaded when `PROBE=0`), and switches off every
+    list that does not fit into `MAX_DOMAINS` (default: 5000). A list that is
+    switched off has to be reported loudly - the traffic of those domains
+    then does not go through the proxy. `scripts/mixomo-memlimit.sh` sets
+    `GOMEMLIMIT` for the core and for the daemon (a soft limit: the garbage
+    collector works harder instead of the kernel killing the process), and
+    `scripts/mixomo-ram.sh` prints the numbers.
+29. **A number in the documentation is a measurement.** Every value that is
+    written down (the memory of the daemon, the size of a list, the RSS of the
+    core) comes from a measurement on a named router with a named build, and
+    the router and the build are named next to it. Values that could not be
+    reproduced are marked as such.
 
 ## The DNS scheme
 

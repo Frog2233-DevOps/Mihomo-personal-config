@@ -54,6 +54,27 @@
 #      IPV6               auto (default) | 1 | 0 - whether MagiTrickle
 #                         manages IPv6. auto: only when the router has IPv6.
 #
+#  The memory of the router decides how much the daemon of MagiTrickle may
+#  hold. It keeps every domain of every list in its RAM (about 13 kB for
+#  every domain, measured on a router with 239 MB), so the lists that do not
+#  fit are switched off - otherwise the oom-killer takes the daemon and
+#  nothing is updated any more:
+#      MAX_DOMAINS       how many domains the daemon may hold (default: 5000,
+#                        0 = no limit)
+#      ANTI_AD           auto (default) | 1 | 0 - the ad list (110 000
+#                        domains). auto: on when the router has at least
+#                        MIN_RAM_MB of RAM
+#      MIN_RAM_MB        the border for auto (default: 384)
+#      GROUP_CUSTOM      the domains of your own list (default: 1 = on)
+#      GROUP_STREAMING   Netflix (default: 1 = on)
+#      GROUP_AI          OpenAI, Anthropic, xAI (default: 1 = on)
+#      GROUP_GITHUB      GitHub (default: 1 = on)
+#      GROUP_STEAM       Steam (default: 0 = off)
+#      GOMEMLIMIT_CORE   the soft memory limit of the core (default: 96MiB,
+#                        0 = none)
+#      GOMEMLIMIT_DAEMON the soft memory limit of the daemon of MagiTrickle
+#                        (default: 64MiB, 0 = none)
+#
 #  Nothing is changed until every file has been downloaded.
 # =============================================================================
 set -eu
@@ -84,6 +105,20 @@ MIXOMO_IPV6_INTERVAL="${MIXOMO_IPV6_INTERVAL:-30}"
 
 # Whether MagiTrickle manages IPv6 at all.
 IPV6="${IPV6:-auto}"
+
+# The memory of the daemon of MagiTrickle.
+MAX_DOMAINS="${MAX_DOMAINS:-5000}"
+ANTI_AD="${ANTI_AD:-auto}"
+MIN_RAM_MB="${MIN_RAM_MB:-384}"
+GROUP_CUSTOM="${GROUP_CUSTOM:-1}"
+GROUP_STREAMING="${GROUP_STREAMING:-1}"
+GROUP_AI="${GROUP_AI:-1}"
+GROUP_GITHUB="${GROUP_GITHUB:-1}"
+GROUP_STEAM="${GROUP_STEAM:-0}"
+
+# The soft memory limit of the two Go programs.
+GOMEMLIMIT_CORE="${GOMEMLIMIT_CORE:-96MiB}"
+GOMEMLIMIT_DAEMON="${GOMEMLIMIT_DAEMON:-64MiB}"
 
 # The rule-sets the core of this scheme uses. Keep in sync with ruleset/ -
 # tests/09_mixomo.sh checks this list against the repository.
@@ -165,7 +200,7 @@ log "downloading the scheme from $REPO@$BRANCH"
 fetch "RU-Mihomo-mixomo.yaml" "$TMP/config.yaml" || fail "cannot download RU-Mihomo-mixomo.yaml"
 fetch "magitrickle/magitrickle.yaml" "$TMP/magitrickle.yaml" || fail "cannot download magitrickle/magitrickle.yaml"
 for s in build-ruleset.sh gen-mtrickle.sh update-mixomo.sh apply-rulesets.sh check-groups.sh bypass-ports.sh \
-         mixomo-ipv6.sh; do
+         mixomo-ipv6.sh mixomo-ram.sh mixomo-memlimit.sh; do
   fetch "scripts/$s" "$TMP/scripts/$s" || fail "cannot download scripts/$s"
 done
 fetch "scripts/mixomo-bypass.init" "$TMP/scripts/mixomo-bypass.init" || fail "cannot download scripts/mixomo-bypass.init"
@@ -210,7 +245,7 @@ cp "$TMP/config.yaml" "$MIHOMO_DIR/config.yaml" || fail "cannot install the conf
 log "config installed: $MIHOMO_DIR/config.yaml"
 
 for s in build-ruleset.sh gen-mtrickle.sh update-mixomo.sh apply-rulesets.sh check-groups.sh bypass-ports.sh \
-         mixomo-ipv6.sh; do
+         mixomo-ipv6.sh mixomo-ram.sh mixomo-memlimit.sh; do
   cp "$TMP/scripts/$s" "$MIHOMO_DIR/scripts/$s" || fail "cannot install scripts/$s"
   chmod +x "$MIHOMO_DIR/scripts/$s" || fail "cannot chmod scripts/$s"
 done
@@ -278,7 +313,25 @@ CUSTOM_LIST="$MIHOMO_DIR/lists/custom-domains.list" \
 TEMPLATE="$MIHOMO_DIR/magitrickle.yaml" \
 OUT="$MAGITRICKLE_DIR/state/config.yaml" \
 IPV6="$IPV6" \
+MAX_DOMAINS="$MAX_DOMAINS" \
+ANTI_AD="$ANTI_AD" \
+MIN_RAM_MB="$MIN_RAM_MB" \
+GROUP_CUSTOM="$GROUP_CUSTOM" \
+GROUP_STREAMING="$GROUP_STREAMING" \
+GROUP_AI="$GROUP_AI" \
+GROUP_GITHUB="$GROUP_GITHUB" \
+GROUP_STEAM="$GROUP_STEAM" \
   sh "$MIHOMO_DIR/scripts/gen-mtrickle.sh" || fail "cannot build the MagiTrickle state"
+
+# --- the soft memory limit ----------------------------------------------------
+# The core and the daemon of MagiTrickle are Go programs. GOMEMLIMIT tells
+# the garbage collector to work harder when the heap comes near the limit, so
+# the process keeps its footprint instead of growing until the oom-killer of
+# the kernel takes it.
+log "setting the soft memory limit of the programs"
+GOMEMLIMIT_CORE="$GOMEMLIMIT_CORE" \
+GOMEMLIMIT_DAEMON="$GOMEMLIMIT_DAEMON" \
+  sh "$MIHOMO_DIR/scripts/mixomo-memlimit.sh" || log "WARNING: the memory limit could not be set"
 
 # --- the daily refresh --------------------------------------------------------
 setup_cron() {
@@ -434,6 +487,15 @@ log "the scheme is installed."
 log "  config:      $MIHOMO_DIR/config.yaml"
 log "  rule-sets:   $MIHOMO_DIR/rule-files/"
 log "  MagiTrickle: $MAGITRICKLE_DIR/state/config.yaml"
+
+# The memory of the router. The daemon of MagiTrickle keeps every domain of
+# every list in its RAM, so the numbers are worth watching.
+if [ -x "$MIHOMO_DIR/scripts/mixomo-ram.sh" ]; then
+  log ""
+  log "the memory of the router:"
+  sh "$MIHOMO_DIR/scripts/mixomo-ram.sh" 2>/dev/null | sed -e 's/^/  /' || true
+fi
+
 # The address of the router depends on the settings of the LAN: 192.168.1.1
 # is only the default.
 lan_ip=$(ip -4 addr show br-lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
@@ -445,3 +507,4 @@ log "next steps:"
 log "  1. Put your own domains into $MIHOMO_DIR/lists/custom-domains.list"
 log "     and run: sh $MIHOMO_DIR/scripts/gen-mtrickle.sh"
 log "  2. Check the groups: sh $MIHOMO_DIR/scripts/check-groups.sh"
+log "  3. Check the memory: sh $MIHOMO_DIR/scripts/mixomo-ram.sh"
