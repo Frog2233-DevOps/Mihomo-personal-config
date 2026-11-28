@@ -81,6 +81,30 @@ else
   ok "the limit can be switched off"
 fi
 
+# An update of mixomo replaces the init script with a new version. The patch
+# has to follow the new version - it must not restore the old one.
+cat >"$FAKE/init.d/mihomo" <<'EOF'
+#!/bin/sh /etc/rc.common
+USE_PROCD=1
+START=99
+procd_open_instance
+procd_set_param command /usr/bin/mihomo -d /etc/mihomo
+procd_set_param env NEW_VERSION=v2
+procd_set_param respawn
+procd_close_instance
+EOF
+sh "$FAKE/limit.sh" >/dev/null 2>&1
+if grep -q 'NEW_VERSION=v2' "$FAKE/init.d/mihomo"; then
+  ok "the patch follows the new version of the init script"
+else
+  bad "the patch restored the old version of the init script"
+fi
+if grep -q 'GOMEMLIMIT=96MiB' "$FAKE/init.d/mihomo"; then
+  ok "the new version of the init script is patched too"
+else
+  bad "the new version of the init script is not patched"
+fi
+
 section "4. the lists that do not fit are switched off"
 
 # A fake core: the rule-sets are not needed for this test.
@@ -156,6 +180,22 @@ subscriptions:
     url: $(url_of ad.txt)
     interval: 604800
     rules: []
+
+  - id: 44444444
+    name: "Off"
+    interface: Mihomo
+    enable: false
+    url: $(url_of small.txt)
+    interval: 604800
+    rules: []
+
+  - id: 55555555
+    name: "Broken"
+    interface: Mihomo
+    enable: true
+    url: $(url_of nothing.txt)
+    interval: 604800
+    rules: []
 EOF
 
 # The state of one subscription in the state file. The id is used and not
@@ -216,6 +256,31 @@ if command -v curl >/dev/null 2>&1; then
     ok "the comment says why the list is switched off"
   else
     bad "the comment does not say why the list is switched off"
+  fi
+
+  # The template decides the state of a list: a list that is off there stays
+  # off, whatever the size of it is.
+  if [ "$(sub_enable "$FAKE/state.yaml" 44444444)" = "false" ]; then
+    ok "the list that is off in the template stays off"
+  else
+    bad "the list that is off in the template was switched on"
+  fi
+
+  # A list of an unknown size is switched off: the daemon keeps every domain
+  # of a list in its RAM, and the oom-killer takes the daemon and the core.
+  if run_gen "$FAKE/state7.yaml" MAX_DOMAINS=5000 PROBE=1; then
+    if [ "$(sub_enable "$FAKE/state7.yaml" 55555555)" = "false" ]; then
+      ok "the list of an unknown size is switched off"
+    else
+      bad "the list of an unknown size was left on"
+    fi
+    if grep -q 'the size of the list is unknown' "$FAKE/state7.yaml"; then
+      ok "the comment says that the size of the list is unknown"
+    else
+      bad "the comment does not say why the list is switched off"
+    fi
+  else
+    bad "gen-mtrickle.sh failed: $(tail -3 "$FAKE/gen.log")"
   fi
 
   # The limit can be switched off.

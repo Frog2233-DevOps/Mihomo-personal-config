@@ -245,7 +245,13 @@ anti_ad_state() { # anti_ad_state -> true | false
 # --- the size of a list -------------------------------------------------------
 # The number of lines of a list. The list is fetched into a temporary file
 # and counted; a list that cannot be fetched is reported as "unknown" (the
-# empty string), because a failed check is not a reason to switch a list off.
+# empty string) - and a list of an unknown size is switched off, because the
+# daemon keeps every domain of a list in its RAM and a list that does not
+# fit takes the daemon - and the core with it.
+#
+# The downloader: mixomo installs curl, but on a plain OpenWrt there is only
+# uclient-fetch (busybox) and wget - and this script runs unattended from
+# the cron. The same list is in scripts/build-ruleset.sh.
 #
 # The daemon needs about 13 kB of RAM for every domain of a list (measured:
 # 1 000 domains - 27 MB of RSS, 5 000 - 79 MB, 10 000 - killed by the
@@ -255,12 +261,15 @@ anti_ad_state() { # anti_ad_state -> true | false
 count_lines() { # count_lines <url>
   f="$WORK/probe.lst"
   rm -f "$f"
-  if ! curl -sS -L --max-time "$PROBE_TIMEOUT" -o "$f" "$1" 2>/dev/null; then
-    rm -f "$f"
-    printf ''
-    return 0
+  ok=0
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --max-time "$PROBE_TIMEOUT" -o "$f" "$1" 2>/dev/null && ok=1
+  elif command -v uclient-fetch >/dev/null 2>&1; then
+    uclient-fetch -q -T "$PROBE_TIMEOUT" -O "$f" "$1" 2>/dev/null && ok=1
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -T "$PROBE_TIMEOUT" -O "$f" "$1" 2>/dev/null && ok=1
   fi
-  if [ ! -s "$f" ]; then
+  if [ "$ok" != "1" ] || [ ! -s "$f" ]; then
     rm -f "$f"
     printf ''
     return 0
@@ -363,12 +372,18 @@ while [ -f "$WORK/subs/sub.$i.part" ]; do
   url=$(sed -n 's/^[[:space:]]*url:[[:space:]]*//p' "$f" | head -1)
   [ -n "$name" ] || name="(without a name)"
   subs_count=$((subs_count + 1))
-  state=true
+  # The state of the list comes from the template. The user decides there -
+  # in the web interface of the daemon the decision does not survive the
+  # daily run, because this script reads the template, not the current state
+  # file.
+  state=$(sed -n 's/^[[:space:]]*enable:[[:space:]]*//p' "$f" | head -1 | tr -d '"')
+  [ "$state" = "true" ] || [ "$state" = "false" ] || state=true
   why=""
 
   # The ad list: the state is decided by the amount of RAM of the router.
   # auto: the list is on when the router has enough RAM for it - and when
-  # it fits into the budget of the domains like every other list.
+  # the template switches it on, and when it fits into the budget of the
+  # domains like every other list.
   is_anti_ad=no
   if grep -q 'Anti-AD' "$f"; then is_anti_ad=yes; fi
   if [ "$is_anti_ad" = "yes" ]; then
@@ -382,7 +397,11 @@ while [ -f "$WORK/subs/sub.$i.part" ]; do
         warn "$why"
         ;;
       *)
-        state="$ANTI_AD_STATE"
+        if [ "$state" != "true" ]; then
+          state=false
+        else
+          state="$ANTI_AD_STATE"
+        fi
         if [ "$state" = "false" ]; then
           why="the ad list is switched off: the router has less than $MIN_RAM_MB MB of RAM"
           warn "$why"
@@ -411,7 +430,17 @@ while [ -f "$WORK/subs/sub.$i.part" ]; do
         budget=$((budget - lines))
       fi
     else
-      warn "the list \"$name\" cannot be fetched - it is left as it is"
+      # The size of the list is unknown. The daemon keeps every domain of a
+      # list in its RAM: an unknown list is switched off, because the price
+      # of a wrong guess is the oom-killer (it takes the daemon and the core
+      # with it), and the price of a switched-off list is one list that does
+      # not work until it is switched on by hand.
+      state=false
+      why="the size of the list is unknown - it is switched off"
+      warn "the list \"$name\" cannot be fetched - it is switched off (the size of the list is unknown)"
+      warn "  (a list that does not fit into the memory of the router takes the daemon with it -"
+      warn "   and the core with it - so a list of an unknown size is switched off)"
+      warn "  switch it on by hand in the web interface of the daemon, if it is small enough"
     fi
   fi
 
@@ -482,7 +511,14 @@ chmod 600 "$OUT" 2>/dev/null || true
 log "state configuration written: $OUT ($(wc -c <"$OUT" | tr -d ' ') bytes)"
 log "IPv6 of MagiTrickle: disabled=$DISABLE_IPV6"
 log "state of the groups: custom=$GROUP_CUSTOM streaming=$GROUP_STREAMING ai=$GROUP_AI github=$GROUP_GITHUB steam=$GROUP_STEAM"
-log "the ad list (Anti-AD): $ANTI_AD_STATE"
+# The state of the ad list after everything: the RAM decides it, and then the
+# budget of the domains. The two decisions are not the same.
+anti_ad_final=$(awk '
+  /^subscriptions:/ { s = 1 }
+  s && /name:/ && /Anti-AD/ { found = 1 }
+  found && /enable:/ { print $2; exit }
+' "$OUT")
+log "the ad list (Anti-AD): ${anti_ad_final:-unknown} (the RAM of the router says $ANTI_AD_STATE)"
 log "subscriptions: $subs_count in the template, $subs_off switched off"
 
 # --- the same groups in the format of the web interface ------------------------
