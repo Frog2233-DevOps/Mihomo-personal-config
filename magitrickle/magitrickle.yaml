@@ -155,7 +155,10 @@ groups:
 
   # GitHub and Steam are reachable from Russia without a proxy, so they are
   # off by default: the traffic of these sites then never touches the core.
-  # Turn them on in the interface if you want them through the proxy.
+  # The state of the groups is written by scripts/gen-mtrickle.sh: to have
+  # them through the proxy, run it with GROUP_GITHUB=1 (GROUP_STEAM=1).
+  # The value here is overwritten by the script - the interface is not the
+  # place for it (the daily run of the script writes this file again).
   - id: 89b87e29
     name: "🐙 GitHub"
     color: "#8b949e"
@@ -180,8 +183,10 @@ groups:
 #  and the router does not have to fetch 200 000 lines every day.
 #
 #  The state of every list (enable: true or false) is decided by
-#  scripts/gen-mtrickle.sh: a list that does not fit into the memory of the
-#  router is switched off, and the script says which one and why.
+#  scripts/gen-mtrickle.sh: the value of this file is the base, and the
+#  script switches a list off when it does not fit into the memory of the
+#  router (and says which one and why). A list that is off here stays off,
+#  whatever the size of it is.
 # =============================================================================
 subscriptions:
   # --- The list of the Russian registrar: blocked ---
@@ -279,8 +284,10 @@ subscriptions:
 
   # --- Services that work from Russia ---
   # They are off by default: the traffic of these sites then never touches
-  # the core, which is the whole point of the scheme. Turn them on in the
-  # interface if you want them through the proxy.
+  # the core, which is the whole point of the scheme. To have them through
+  # the proxy, set "enable: true" here - this file is the source of truth for
+  # the script, and the changes of the web interface do not survive its
+  # daily run.
   - id: 74832f4a
     name: "▶️ YouTube"
     interface: Mihomo

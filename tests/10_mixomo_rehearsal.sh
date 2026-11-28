@@ -54,8 +54,15 @@ ln -sf "$MIHOMO" "$FAKE/bin/mihomo"
 export PATH="$FAKE/bin:$PATH"
 
 section "2. a local copy of the repository serves the files"
-PORT=18099
-while nc -z 127.0.0.1 "$PORT" >/dev/null 2>&1; do PORT=$((PORT + 1)); done
+# The free port is asked from python3: nc is not everywhere (and where it is
+# missing, the scan of the ports fails silently and the server starts on a
+# port that is already taken - with the message "the local server did not
+# start", which says nothing about the real reason).
+PORT=$(python3 -c 'import socket
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()' 2>/dev/null || printf '18099')
 python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$ROOT" >"$TMPDIR_TEST/http.log" 2>&1 &
 HTTP_PID=$!
 sleep 1

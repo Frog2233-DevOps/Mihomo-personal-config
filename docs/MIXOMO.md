@@ -391,9 +391,12 @@ What the scheme does about it:
   WARNING: the list "🚫 RKN Blocked" has 81460 lines, only 4800 are left: it is switched off
   ```
 
-  The size is read with `curl` (the list is not downloaded when `PROBE=0`,
-  and a list that cannot be fetched is left alone - a failed check is not a
-  reason to switch a list off).
+  The size is read with `curl` (or `uclient-fetch`, or `wget` - whatever is
+  on the router). The list is not downloaded when `PROBE=0`. A list whose size
+  **cannot** be measured is switched off: the daemon keeps every domain of a
+  list in its RAM, so the price of a wrong guess is the oom-killer (it takes
+  the daemon and the core with it), while the price of a switched-off list is
+  one list that does not work until it is switched on by hand.
 * The groups of the scheme are switchable, and every domain of a group is
   also RAM of the daemon: `GROUP_CUSTOM`, `GROUP_STREAMING`, `GROUP_AI`,
   `GROUP_GITHUB`, `GROUP_STEAM`.
@@ -556,6 +559,12 @@ The rules that hold for both builds:
   interface - it is in the state file, and `scripts/gen-mtrickle.sh` writes
   it (`GROUP_CUSTOM`, `GROUP_STREAMING`, `GROUP_AI`, `GROUP_GITHUB`,
   `GROUP_STEAM`).
+* the state of the **subscriptions** (which lists are on) is in the template
+  `magitrickle/magitrickle.yaml` - the script reads it and writes it into
+  the state file. The changes that are made in the web interface of the
+  daemon do **not** survive the daily run of the script (05:30): the
+  template is what it reads. A list that is off in the template stays off,
+  whatever the size of it is.
 
 ## A manual config instead of the installer
 
