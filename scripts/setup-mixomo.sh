@@ -200,7 +200,7 @@ log "downloading the scheme from $REPO@$BRANCH"
 fetch "RU-Mihomo-mixomo.yaml" "$TMP/config.yaml" || fail "cannot download RU-Mihomo-mixomo.yaml"
 fetch "magitrickle/magitrickle.yaml" "$TMP/magitrickle.yaml" || fail "cannot download magitrickle/magitrickle.yaml"
 for s in build-ruleset.sh gen-mtrickle.sh update-mixomo.sh apply-rulesets.sh check-groups.sh bypass-ports.sh \
-         mixomo-ipv6.sh mixomo-ram.sh mixomo-memlimit.sh; do
+         mixomo-ipv6.sh mixomo-ram.sh mixomo-memlimit.sh diag-core-crash.sh fix-magitrickle-ooms.sh; do
   fetch "scripts/$s" "$TMP/scripts/$s" || fail "cannot download scripts/$s"
 done
 fetch "scripts/mixomo-bypass.init" "$TMP/scripts/mixomo-bypass.init" || fail "cannot download scripts/mixomo-bypass.init"
@@ -245,7 +245,7 @@ cp "$TMP/config.yaml" "$MIHOMO_DIR/config.yaml" || fail "cannot install the conf
 log "config installed: $MIHOMO_DIR/config.yaml"
 
 for s in build-ruleset.sh gen-mtrickle.sh update-mixomo.sh apply-rulesets.sh check-groups.sh bypass-ports.sh \
-         mixomo-ipv6.sh mixomo-ram.sh mixomo-memlimit.sh; do
+         mixomo-ipv6.sh mixomo-ram.sh mixomo-memlimit.sh diag-core-crash.sh fix-magitrickle-ooms.sh; do
   cp "$TMP/scripts/$s" "$MIHOMO_DIR/scripts/$s" || fail "cannot install scripts/$s"
   chmod +x "$MIHOMO_DIR/scripts/$s" || fail "cannot chmod scripts/$s"
 done
